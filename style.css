@@ -2,7 +2,7 @@ html, body { height: 100%; }
 body {
   font-family: 'Inter', system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
   font-weight: 400;
-  touch-action: manipulation;
+  touch-action: manipulation
   overflow: hidden; /* prevent page scroll (spacebar / layout growth) */
 }
 
