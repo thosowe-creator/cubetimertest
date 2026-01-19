@@ -198,3 +198,57 @@ body.no-scroll { overflow: hidden; }
   .scramble-diagram, .scramble-skeleton { width: 200px; height: 140px; }
   .timer-display { font-size: clamp(3.4rem, 14vw, 8.5rem); }
 }
+
+/* === Responsive shrink hotfix (viewport-height driven) === */
+/* Allow flex children to actually shrink instead of forcing overflow */
+#timerSection, #scrambleBox, #toolContainer, .scramble-bottom-area {
+  min-height: 0;
+}
+
+:root {
+  --toolMinH: 190px;
+  --scrambleBottomH: 190px;
+  --scramblePad: 1.5rem;
+  --timerScaleVH: 1;
+}
+
+/* Apply budgets */
+#toolContainer { min-height: var(--toolMinH) !important; }
+.scramble-bottom-area { height: var(--scrambleBottomH) !important; }
+.scramble-box { padding: var(--scramblePad) !important; }
+
+.timer-display {
+  /* Bigger by default, but can scale down on short screens */
+  font-size: clamp(6rem, 14vw, 13rem);
+  transform: scale(var(--timerScaleVH));
+  transform-origin: center;
+}
+
+@media (max-height: 720px) {
+  :root {
+    --toolMinH: 150px;
+    --scrambleBottomH: 150px;
+    --scramblePad: 1.1rem;
+    --timerScaleVH: 0.98;
+  }
+}
+
+@media (max-height: 640px) {
+  :root {
+    --toolMinH: 120px;
+    --scrambleBottomH: 120px;
+    --scramblePad: 0.85rem;
+    --timerScaleVH: 0.95;
+  }
+  /* Hide diagram area earlier on very short screens */
+  #scrambleDiagramSkeleton { display: none !important; }
+}
+
+@media (max-height: 560px) {
+  :root {
+    --toolMinH: 90px;
+    --scrambleBottomH: 90px;
+    --scramblePad: 0.65rem;
+    --timerScaleVH: 0.92;
+  }
+}
