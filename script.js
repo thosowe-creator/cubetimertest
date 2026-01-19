@@ -18,14 +18,6 @@ let activeTool = 'scramble';
 let holdDuration = 300; // ms
 let wakeLock = null;
 let isWakeLockEnabled = false;
-
-// PWA: register service worker (best-effort)
-window.addEventListener('load', () => {
-    if (!('serviceWorker' in navigator)) return;
-    navigator.serviceWorker.register('./sw.js').catch(() => {
-        // Silently ignore in environments that don't support SW or when served as file://
-    });
-});
 // Inspection Logic Vars
 let isInspectionMode = false;
 let inspectionState = 'none'; // 'none', 'inspecting', 'holding'
@@ -455,21 +447,20 @@ let cubeState = {};
 const COLORS = { U: '#FFFFFF', D: '#FFD500', L: '#FF8C00', R: '#DC2626', F: '#16A34A', B: '#2563EB' };
 // --- Mobile Tab Logic ---
 window.switchMobileTab = (tab) => {
-    const main = document.getElementById('mainContent');
-    if (main) main.setAttribute('data-mobile-tab', tab);
-
     if (tab === 'timer') {
-        // Timer is the default visible screen (CSS handles animation)
+        // Show Timer, Hide History
         timerSection.classList.remove('hidden');
-        historySection.classList.remove('hidden');
+        historySection.classList.add('hidden');
         
         // Update Tab Colors
         mobTabTimer.className = "flex flex-col items-center justify-center w-full h-full text-blue-600 dark:text-blue-400";
         mobTabHistory.className = "flex flex-col items-center justify-center w-full h-full text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300 transition-colors";
     } else if (tab === 'history') {
-        // History screen (CSS handles animation)
-        timerSection.classList.remove('hidden');
+        // Hide Timer, Show History
+        timerSection.classList.add('hidden');
         historySection.classList.remove('hidden');
+        // Force flex for history section when active on mobile
+        historySection.classList.add('flex');
         // Update Tab Colors
         mobTabHistory.className = "flex flex-col items-center justify-center w-full h-full text-blue-600 dark:text-blue-400";
         mobTabTimer.className = "flex flex-col items-center justify-center w-full h-full text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300 transition-colors";
@@ -1947,7 +1938,7 @@ window.openSettings = () => {
     if (overlay.classList.contains('active')) {
         closeSettings();
     } else {
-        // Lock background scroll while settings are open
+        // Lock background scroll/gesture while settings is open
         document.body.classList.add('modal-scroll-lock');
         overlay.classList.add('active'); 
         setTimeout(()=>document.getElementById('settingsModal').classList.remove('scale-95','opacity-0'), 10); 
@@ -1956,7 +1947,7 @@ window.openSettings = () => {
 window.closeSettings = () => {
     document.getElementById('settingsModal').classList.add('scale-95','opacity-0');
     setTimeout(()=>document.getElementById('settingsOverlay').classList.remove('active'), 200);
-    // Unlock background scroll (keep timing lock if currently running)
+    // Keep timing lock if running, otherwise unlock
     if (!isRunning) document.body.classList.remove('modal-scroll-lock');
     saveData();
 };
@@ -2016,3 +2007,12 @@ applyLanguageToUI();
 changeEvent(currentEvent);
 // Check for updates on load
 checkUpdateLog();
+
+// PWA: register service worker (safe to ignore on unsupported / local file://)
+try {
+  if ('serviceWorker' in navigator && location.protocol !== 'file:') {
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('./sw.js').catch(() => {});
+    });
+  }
+} catch (_) {}
