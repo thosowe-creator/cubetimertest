@@ -318,9 +318,10 @@ const RELEASE_NOTES = [
     items: {
       ko: [
         '모든 종목의 스크램블 이미지 표기',
-        '모든 종목의 스크램블 로직 고도화',
+        '모든 종목의 스크램블 로직 개선',
         '타이머 오차가 있던 현상 수정',
         '멀티블라인드 스코어 입력 기능 추가',
+        '종목 선택 탭 개선',
         '영어 및 한국어 지원',
       ],
       en: [
@@ -328,6 +329,7 @@ const RELEASE_NOTES = [
         'Improved scramble logic for all events',
         'Fixed timer accuracy issue',
         'Added multi-blind score input',
+        'Event selection tab improvements',
         'Korean & English language support',
       ]
     }
