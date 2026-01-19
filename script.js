@@ -282,7 +282,9 @@ function applyLanguageToUI() {
   const scrambleRetryBtn = document.getElementById('scrambleRetryBtn');
   if (scrambleRetryBtn) scrambleRetryBtn.textContent = t('scrambleRetry');
   const statusHint = document.getElementById('statusHint');
-  if (statusHint && !isRunning && !isReady) statusHint.textContent = t('holdToReady');
+// Initialize responsive budgets once on load
+setTimeout(updateResponsiveBudgets, 0);
+  if (statusHint && !isRunning && !isReady) statusHint.textContent = '';
 
   // Update Log modal labels
   const updateOverlay = document.getElementById('updateLogOverlay');
@@ -445,6 +447,41 @@ function mapEventIdForCubing(eventId){
 }
 let cubeState = {};
 const COLORS = { U: '#FFFFFF', D: '#FFD500', L: '#FF8C00', R: '#DC2626', F: '#16A34A', B: '#2563EB' };
+
+
+// === Responsive Budgets (scramble-aware) ===
+function updateResponsiveBudgets(){
+    if (!scrambleEl) return;
+    const root = document.documentElement;
+    if (!root) return;
+
+    // Estimate wrapped line count from rendered height / line-height
+    const cs = window.getComputedStyle(scrambleEl);
+    const lineHeight = parseFloat(cs.lineHeight || '0');
+    const h = scrambleEl.getBoundingClientRect().height;
+    let lines = 2;
+    if (lineHeight > 0) {
+        lines = Math.max(1, Math.round(h / lineHeight));
+    }
+
+    // Dynamic reserved area: more scramble lines -> less reserved space for diagram/tools
+    const isDesktop = window.innerWidth >= 768;
+    const base = isDesktop ? 220 : 190;
+    const minH = isDesktop ? 140 : 110;
+    const reducePerLine = isDesktop ? 18 : 20;
+    const extra = Math.max(0, lines - 2);
+    const budget = Math.max(minH, base - (extra * reducePerLine));
+
+    root.style.setProperty('--scramble-bottom-h', budget + 'px');
+    root.style.setProperty('--tool-min-h', budget + 'px');
+
+    // Timer scale: keep it big by default, shrink slightly as scramble grows
+    // Clamp to avoid extreme jumps.
+    const maxScale = 1.06;
+    const minScale = 0.88;
+    const scale = Math.max(minScale, Math.min(maxScale, maxScale - (extra * 0.04)));
+    root.style.setProperty('--timer-scale', String(scale));
+}
 // --- Mobile Tab Logic ---
 window.switchMobileTab = (tab) => {
     if (tab === 'timer') {
@@ -471,6 +508,7 @@ window.switchMobileTab = (tab) => {
 };
 // Ensure desktop layout on resize
 window.addEventListener('resize', () => {
+    updateResponsiveBudgets();
     if (window.innerWidth >= 768) {
         // Desktop: Show both
         timerSection.classList.remove('hidden');
@@ -786,7 +824,7 @@ function onBTDisconnected() {
     btBtn.disabled = false;
     btBtn.innerText = "Connect Timer";
     document.getElementById('btStatusText').innerText = "Timer Disconnected";
-    statusHint.innerText = "Hold to Ready";
+    statusHint.innerText = "";
 }
 function setControlsLocked(locked) {
     // RUNNING 중 실수 방지 (모바일 한 손 사용 가이드)
@@ -869,7 +907,7 @@ function stopTimer(forcedTime = null) {
     setControlsLocked(false);
     updateUI();
     generateScramble();
-    statusHint.innerText = isBtConnected ? "Ready (Bluetooth)" : (isInspectionMode ? "Start Inspection" : "Hold to Ready");
+    statusHint.innerText = isBtConnected ? "Ready (Bluetooth)" : (isInspectionMode ? "Start Inspection" : "");
     timerEl.classList.remove('text-running', 'text-ready');
     timerEl.style.color = '';
     setControlsLocked(false);
@@ -1029,7 +1067,7 @@ function loadData() {
     initSessionIfNeeded(currentEvent);
     
     if (!isBtConnected) {
-        statusHint.innerText = isInspectionMode ? "Start Inspection" : "Hold to Ready";
+        statusHint.innerText = isInspectionMode ? "Start Inspection" : "";
     }
 }
 function initSessionIfNeeded(eventId) {
@@ -1304,7 +1342,8 @@ async function generateScramble() {
             if (reqId !== scrambleReqId) return; // stale
             currentScramble = alg.toString();
             if (scrambleEl) scrambleEl.innerText = currentScramble;
-            setScrambleLoadingState(false);
+    try { updateResponsiveBudgets(); } catch (_) {}
+    setScrambleLoadingState(false);
             updateScrambleDiagram();
             resetPenalty();
             if (activeTool === 'graph') renderHistoryGraph();
@@ -1438,6 +1477,7 @@ async function generateScramble() {
     }
     if (reqId !== scrambleReqId) return; // stale
     if (scrambleEl) scrambleEl.innerText = currentScramble;
+            try { updateResponsiveBudgets(); } catch (_) {}
     setScrambleLoadingState(false);
     updateScrambleDiagram();
     resetPenalty();
@@ -1573,7 +1613,7 @@ window.closeMbfResultModal = () => {
     const overlay = document.getElementById('mbfResultOverlay');
     if (overlay) overlay.classList.remove('active');
     pendingMbfDraft = null;
-    statusHint.innerText = isBtConnected ? "Ready (Bluetooth)" : (isInspectionMode ? "Start Inspection" : "Hold to Ready");
+    statusHint.innerText = isBtConnected ? "Ready (Bluetooth)" : (isInspectionMode ? "Start Inspection" : "");
 }
 window.saveMbfResult = () => {
     const errEl = document.getElementById('mbfResultError');
@@ -1770,6 +1810,8 @@ function handleStart(e) {
     }, holdDuration); 
 }
 function handleEnd(e) {
+    // [FIX] Ignore releases on interactive elements so taps work on mobile
+    if (e && e.type !== 'keyup' && e.type !== 'keydown' && e.target && (e.target.closest('.avg-badge') || e.target.closest('button') || e.target.closest('.tools-dropdown'))) return;
     // [CRITICAL FIX] Prevent immediate inspection restart after stopping timer
     if (Date.now() - lastStopTimestamp < 500) return;
     // BT 모드일 때
@@ -1797,9 +1839,9 @@ function handleEnd(e) {
         
         timerEl.classList.remove('holding-status','ready-to-start'); 
         isReady=false; 
-        // If inspecting, don't reset to "Hold to Ready"
+        // If inspecting, show inspection label; otherwise keep empty
         if (!isInspectionMode || inspectionState === 'none') {
-            statusHint.innerText= isInspectionMode ? "Start Inspection" : "Hold to Ready";
+            statusHint.innerText= isInspectionMode ? "Start Inspection" : "";
         } else {
             // Returned to inspecting state without starting
             timerEl.style.color = '#ef4444'; 
@@ -1938,19 +1980,11 @@ window.openSettings = () => {
     if (overlay.classList.contains('active')) {
         closeSettings();
     } else {
-        // Lock background scroll/gesture while settings is open
-        document.body.classList.add('modal-scroll-lock');
         overlay.classList.add('active'); 
         setTimeout(()=>document.getElementById('settingsModal').classList.remove('scale-95','opacity-0'), 10); 
     }
 };
-window.closeSettings = () => {
-    document.getElementById('settingsModal').classList.add('scale-95','opacity-0');
-    setTimeout(()=>document.getElementById('settingsOverlay').classList.remove('active'), 200);
-    // Keep timing lock if running, otherwise unlock
-    if (!isRunning) document.body.classList.remove('modal-scroll-lock');
-    saveData();
-};
+window.closeSettings = () => { document.getElementById('settingsModal').classList.add('scale-95','opacity-0'); setTimeout(()=>document.getElementById('settingsOverlay').classList.remove('active'), 200); saveData(); };
 window.handleOutsideSettingsClick = (e) => { if(e.target === document.getElementById('settingsOverlay')) closeSettings(); };
 window.showSolveDetails = (id) => {
     const s = solves.find(x => x.id === id);
@@ -1978,10 +2012,17 @@ window.showSolveDetails = (id) => {
     if (overlay) overlay.classList.add('active');
 };
 window.closeModal = () => document.getElementById('modalOverlay').classList.remove('active');
-window.useThisScramble = () => { let s=solves.find(x=>x.id===selectedSolveId); if(s){currentScramble=s.scramble; scrambleEl.innerText=currentScramble; closeModal();} };
+window.useThisScramble = () => {
+  const s = solves.find(x => x.id === selectedSolveId);
+  if (!s) return;
+  currentScramble = s.scramble;
+  if (scrambleEl) scrambleEl.innerText = currentScramble;
+  try { updateResponsiveBudgets(); } catch (_) {}
+  closeModal();
+};
 precisionToggle.onchange = e => { precision = e.target.checked?3:2; updateUI(); timerEl.innerText=(0).toFixed(precision); saveData(); };
 avgModeToggle.onchange = e => { isAo5Mode = e.target.checked; updateUI(); saveData(); };
-manualEntryToggle.onchange = e => { isManualMode = e.target.checked; timerEl.classList.toggle('hidden', isManualMode); manualInput.classList.toggle('hidden', !isManualMode); statusHint.innerText = isManualMode ? (currentLang === 'ko' ? '시간 입력 후 Enter' : 'Type time & Enter') : t('holdToReady'); };
+manualEntryToggle.onchange = e => { isManualMode = e.target.checked; timerEl.classList.toggle('hidden', isManualMode); manualInput.classList.toggle('hidden', !isManualMode); statusHint.innerText = isManualMode ? (currentLang === 'ko' ? '시간 입력 후 Enter' : 'Type time & Enter') : ''; };
 document.getElementById('clearHistoryBtn').onclick = () => {
   const sid = getCurrentSessionId();
   const msg = 'Clear all history for this session?';
@@ -2008,11 +2049,21 @@ changeEvent(currentEvent);
 // Check for updates on load
 checkUpdateLog();
 
-// PWA: register service worker (safe to ignore on unsupported / local file://)
-try {
-  if ('serviceWorker' in navigator && location.protocol !== 'file:') {
-    window.addEventListener('load', () => {
-      navigator.serviceWorker.register('./sw.js').catch(() => {});
-    });
-  }
-} catch (_) {}
+
+// === Avg badge tap reliability (mobile) ===
+(() => {
+  const badges = document.querySelectorAll('.avg-badge');
+  badges.forEach((b) => {
+    b.addEventListener('pointerup', (e) => {
+      // Don't let timer touchend cancel the click
+      try { e.stopPropagation(); } catch (_) {}
+
+      const onclickAttr = b.getAttribute('onclick') || '';
+      if (onclickAttr.includes("openAvgShare('primary')")) {
+        if (typeof window.openAvgShare === 'function') window.openAvgShare('primary');
+      } else if (onclickAttr.includes("openAvgShare('ao12')")) {
+        if (typeof window.openAvgShare === 'function') window.openAvgShare('ao12');
+      }
+    }, { passive: true });
+  });
+})();
