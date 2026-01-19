@@ -1,3 +1,4 @@
+html, body { height: 100%; }
 body { font-family: 'Quicksand', sans-serif; touch-action: manipulation; }
 .timer-display { font-family: 'JetBrains+Mono', monospace; font-size: clamp(4rem, 18vw, 10rem); font-weight: 700; line-height: 1; transition: color 0.1s; }
 .manual-input { font-family: 'JetBrains+Mono', monospace; font-size: clamp(2.5rem, 12vw, 6rem); background: transparent; border: none; outline: none; text-align: center; width: 100%; }
@@ -45,6 +46,72 @@ input[type=range]::-webkit-slider-runnable-track { width: 100%; height: 4px; cur
 
 /* While timing, we intentionally prevent page scroll to avoid accidental movement */
 body.no-scroll { overflow: hidden; }
+/* While any modal is open, also prevent background scroll */
+body.modal-scroll-lock { overflow: hidden; }
+
+/* Main layout: prevent page-level scrolling; only internal panels should scroll */
+#mainContent { overflow: hidden; }
+
+/* Mobile tab transitions (Timer <-> History). We avoid `display:none` to allow animated switching. */
+@media (max-width: 767px){
+  #mainContent{
+    position: relative;
+    padding-bottom: calc(6rem + env(safe-area-inset-bottom));
+  }
+  #timerSection,
+  #historySection{
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    transition: transform 220ms ease, opacity 220ms ease;
+    will-change: transform, opacity;
+  }
+  /* Allow timer screen to scroll internally if the device height is very small */
+  #timerSection{
+    overflow-y: auto;
+    padding-bottom: calc(8rem + env(safe-area-inset-bottom));
+    -webkit-overflow-scrolling: touch;
+  }
+  /* Default: Timer visible, History off-canvas to the right */
+  #timerSection{ transform: translateX(0); opacity: 1; pointer-events: auto; }
+  #historySection{ transform: translateX(100%); opacity: 0; pointer-events: none; }
+
+  /* When History is selected */
+  #mainContent[data-mobile-tab="history"] #timerSection{ transform: translateX(-12%); opacity: 0; pointer-events: none; }
+  #mainContent[data-mobile-tab="history"] #historySection{ transform: translateX(0); opacity: 1; pointer-events: auto; }
+}
+
+/* Mobile: penalty bar should always be reachable */
+@media (max-width: 767px){
+  #penaltyBar{
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: calc(4rem + env(safe-area-inset-bottom));
+    width: min(100%, 36rem);
+    margin: 0 auto;
+    z-index: 55;
+  }
+}
+
+/* Settings modal: scroll inside modal, not background */
+#settingsModal{
+  max-height: calc(100dvh - 2rem);
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Mobile Settings: bottom-sheet feel */
+@media (max-width: 767px){
+  #settingsOverlay{ align-items: flex-end; }
+  #settingsModal{
+    width: 100%;
+    max-width: none;
+    border-bottom-left-radius: 0;
+    border-bottom-right-radius: 0;
+  }
+}
 .avg-badge { padding: 1rem 1.5rem; border-radius: 1rem; background: white; border: 1px solid #f1f5f9; box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05); min-width: 140px; display: flex; flex-direction: column; align-items: center; cursor: pointer; transition: transform 0.1s; }
 .dark .avg-badge { background-color: #1e293b; border-color: #334155; }
 .avg-badge:active { transform: scale(0.95); }
@@ -114,10 +181,13 @@ body.no-scroll { overflow: hidden; }
 
 /* Reserve space below scramble text to prevent timer shift */
 .scramble-bottom-area{
-  height:190px;
+  /* fixed height(190px)가 작은 화면에서 레이아웃을 쉽게 터뜨려서 clamp로 완화 */
+  height: clamp(120px, 22vh, 190px);
 }
 @media (min-width: 768px){
   .scramble-bottom-area{
-    height:220px;
+    height: clamp(160px, 22vh, 220px);
   }
 }
+
+
