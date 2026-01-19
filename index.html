@@ -26,13 +26,6 @@
     </script>
     <link href="https://fonts.googleapis.com/css2?family=Quicksand:wght@500;700&family=JetBrains+Mono:wght@700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="style.css">
-
-    <!-- PWA (app-like standalone on mobile) -->
-    <link rel="manifest" href="manifest.json">
-    <meta name="theme-color" content="#2563eb">
-    <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <link rel="apple-touch-icon" href="icons/icon-192.png">
     <style>
         /* Mobile Bottom Nav Safe Area */
         .pb-safe { padding-bottom: env(safe-area-inset-bottom); }
@@ -315,10 +308,10 @@
 
     <!-- Main Content -->
     <!-- Added id='mainContent' and pb-20 for mobile bottom nav space -->
-    <main id="mainContent" class="main-container flex flex-col md:flex-row p-4 gap-6 flex-grow pb-24 md:pb-4" data-mobile-tab="timer">
+    <main id="mainContent" class="main-container flex flex-col md:flex-row p-4 gap-6 flex-grow overflow-y-auto pb-24 md:pb-4">
         
         <!-- Timer View Section (Shown by default on Mobile/Desktop) -->
-        <div id="timerSection" class="flex-grow flex flex-col items-center h-full order-1 w-full">
+        <div id="timerSection" class="flex-grow flex flex-col items-center justify-between h-full order-1 w-full">
             <div class="w-full space-y-6">
                 <!-- Event Select (Scroll) -->
                 <div class="flex flex-col items-center gap-3"> 
@@ -436,11 +429,11 @@
                     </div>
                 </div>
                 
-                <div id="statusHint" class="bg-white dark:bg-slate-800 px-6 py-2 rounded-full text-slate-400 text-xs font-bold tracking-widest shadow-sm border border-slate-100 dark:border-slate-700 uppercase transition-all duration-200">Hold to Ready</div>
+                <div id="statusHint" class="bg-white dark:bg-slate-800 px-6 py-2 rounded-full text-slate-400 text-xs font-bold tracking-widest shadow-sm border border-slate-100 dark:border-slate-700 uppercase transition-all duration-200"></div>
             </div>
 
             <!-- Buttons: Penalty/Delete -->
-            <div id="penaltyBar" class="w-full max-w-xl flex justify-center gap-4 mt-2 mb-6 bg-slate-50/80 dark:bg-slate-950/80 backdrop-blur px-2 py-3 rounded-2xl border border-slate-100 dark:border-slate-800">
+            <div id="penaltyBar" class="w-full max-w-xl flex justify-center gap-4 mt-2 mb-6 md:static sticky bottom-[calc(4rem+env(safe-area-inset-bottom))] bg-slate-50/80 dark:bg-slate-950/80 backdrop-blur px-2 py-3 rounded-2xl border border-slate-100 dark:border-slate-800">
                 <button id="plus2Btn" class="penalty-btn inactive" onclick="togglePenalty('+2')">+2</button>
                 <button id="dnfBtn" class="penalty-btn inactive" onclick="togglePenalty('DNF')">DNF</button>
             </div>
