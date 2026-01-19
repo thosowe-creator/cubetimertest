@@ -10,8 +10,9 @@ body {
   /* Match the averages font for consistency */
   font-family: inherit;
   font-variant-numeric: tabular-nums;
-  font-size: clamp(4.8rem, 18vw, 11.5rem);
-  font-weight: 500; /* thinner than 700 */
+  /* Base size (viewport-budget block near the end may override) */
+  font-size: clamp(5.6rem, 18vw, 13rem);
+  font-weight: 400; /* thinner */
   line-height: 1;
   transition: color 0.1s;
 }
@@ -209,7 +210,6 @@ body.no-scroll { overflow: hidden; }
   --toolMinH: 190px;
   --scrambleBottomH: 190px;
   --scramblePad: 1.5rem;
-  --timerScaleVH: 1;
 }
 
 /* Apply budgets */
@@ -219,9 +219,14 @@ body.no-scroll { overflow: hidden; }
 
 .timer-display {
   /* Bigger by default, but can scale down on short screens */
-  font-size: clamp(6rem, 14vw, 13rem);
-  transform: scale(var(--timerScaleVH));
-  transform-origin: center;
+  font-size: clamp(7.2rem, 20vw, 16rem);
+}
+
+/* Make the diagram responsive so the top block can actually shrink on short screens */
+.scramble-diagram,
+.scramble-skeleton{
+  width: clamp(200px, 55vw, 320px);
+  height: clamp(120px, 24vh, 220px);
 }
 
 @media (max-height: 720px) {
@@ -229,8 +234,8 @@ body.no-scroll { overflow: hidden; }
     --toolMinH: 150px;
     --scrambleBottomH: 150px;
     --scramblePad: 1.1rem;
-    --timerScaleVH: 0.98;
   }
+  .timer-display { font-size: clamp(6.1rem, 18vw, 14rem); }
 }
 
 @media (max-height: 640px) {
@@ -238,10 +243,11 @@ body.no-scroll { overflow: hidden; }
     --toolMinH: 120px;
     --scrambleBottomH: 120px;
     --scramblePad: 0.85rem;
-    --timerScaleVH: 0.95;
   }
   /* Hide diagram area earlier on very short screens */
   #scrambleDiagramSkeleton { display: none !important; }
+  #scrambleDiagram { display: none !important; }
+  .timer-display { font-size: clamp(5.6rem, 18vw, 13.2rem); }
 }
 
 @media (max-height: 560px) {
@@ -249,6 +255,27 @@ body.no-scroll { overflow: hidden; }
     --toolMinH: 90px;
     --scrambleBottomH: 90px;
     --scramblePad: 0.65rem;
-    --timerScaleVH: 0.92;
+  }
+  .timer-display { font-size: clamp(5.1rem, 18vw, 12.2rem); }
+}
+
+/* Narrow windows: compress vertical spacing so the whole UI fits without scrolling */
+@media (max-width: 1024px) {
+  :root { --scramblePad: 1.1rem; }
+}
+
+@media (max-width: 768px) {
+  :root {
+    --toolMinH: 120px;
+    --scrambleBottomH: 120px;
+    --scramblePad: 0.85rem;
+  }
+}
+
+@media (max-width: 480px) {
+  :root {
+    --toolMinH: 90px;
+    --scrambleBottomH: 90px;
+    --scramblePad: 0.65rem;
   }
 }
