@@ -69,6 +69,109 @@ function t(key) {
   const table = I18N[currentLang] || I18N.ko;
   return table[key] ?? key;
 }
+
+// Full-UI i18n helper
+// 기존 HTML의 문구를 전부 data-i18n으로 바꾸지 않아도 되도록,
+// 버튼/라벨/설명 등 고정 문구는 텍스트 매칭으로 일괄 번역합니다.
+// (동적 값/숫자는 매칭되지 않도록 "완전 일치"만 처리)
+const AUTO_I18N_PAIRS = [
+  // Header / common
+  { en: 'Backup', ko: '백업' },
+  { en: 'Restore', ko: '복원' },
+  { en: 'Close', ko: '닫기' },
+  { en: 'Cancel', ko: '취소' },
+  { en: 'Save', ko: '저장' },
+  { en: 'Add', ko: '추가' },
+  { en: 'Clear', ko: '초기화' },
+  { en: 'Clear All', ko: '전체 삭제' },
+  { en: 'Clear all history for this session?', ko: '이 세션의 기록을 모두 삭제할까요?' },
+  { en: 'Timer', ko: '타이머' },
+  { en: 'Stats', ko: '기록' },
+  { en: 'History', ko: '기록' },
+  { en: 'Settings', ko: '설정' },
+  { en: 'Update Log', ko: '업데이트' },
+  { en: 'Developer Log', ko: '개발자 로그' },
+  { en: 'Event', ko: '종목' },
+  { en: 'Scramble', ko: '스크램블' },
+  { en: 'Tools', ko: '도구' },
+  { en: 'Scramble Image', ko: '스크램블 이미지' },
+  { en: 'Graph (Trends)', ko: '그래프(추세)' },
+  { en: 'Visualizer for standard cubes only', ko: '기본 큐브 종목만 지원합니다' },
+
+  // Bluetooth
+  { en: 'Bluetooth Timer', ko: '블루투스 타이머' },
+  { en: 'Connect your Gan Smart Timer', ko: 'Gan Smart Timer를 연결하세요' },
+  { en: 'Device', ko: '기기' },
+  { en: 'Connect Timer', ko: '타이머 연결' },
+  { en: 'Disconnect', ko: '연결 해제' },
+
+  // Sessions
+  { en: 'Sessions', ko: '세션' },
+  { en: 'Create New Session', ko: '새 세션 만들기' },
+  { en: 'Session Name', ko: '세션 이름' },
+
+  // MBF
+  { en: 'Multi-Blind Scrambles', ko: '멀티블라인드 스크램블' },
+  { en: 'Cubes', ko: '개' },
+  { en: 'Copy All', ko: '전체 복사' },
+  { en: 'MBF Result', ko: 'MBF 결과' },
+  { en: 'WCA 형식(Attempted / Solved / Time)을 입력해 주세요.', ko: 'WCA 형식(시도 / 성공 / 시간)을 입력해 주세요.' },
+  { en: 'Attempted', ko: '시도' },
+  { en: 'Solved', ko: '성공' },
+  { en: 'Time', ko: '시간' },
+  { en: 'Enter number of cubes', ko: '큐브 개수 입력' },
+  { en: 'e.g. 10', ko: '예: 10' },
+  { en: 'mm:ss', ko: '분:초' },
+
+  // Settings rows
+  { en: 'Dark Mode', ko: '다크 모드' },
+  { en: 'Prevent Sleep (Wake Lock)', ko: '화면 꺼짐 방지(Wake Lock)' },
+  { en: 'WCA Inspection', ko: 'WCA 인스펙션' },
+  { en: '15s countdown + voice', ko: '15초 카운트다운 + 음성' },
+  { en: 'Hold Duration', ko: '홀드 시간' },
+
+  // History footer
+  { en: 'Avg of All', ko: '전체 평균' },
+  { en: '(More)', ko: '(더보기)' },
+  { en: 'Personal Best', ko: '개인 최고' },
+
+  // Scramble status defaults
+  { en: 'Generating...', ko: '생성 중…' },
+  { en: 'Loading scramble…', ko: '스크램블 로딩 중…' },
+  { en: 'Failed. Tap to retry.', ko: '실패. 탭해서 재시도' },
+  { en: 'Hold to Ready', ko: '길게 눌러 Ready' },
+];
+
+const AUTO_I18N_LOOKUP = (() => {
+  const map = new Map();
+  for (const p of AUTO_I18N_PAIRS) {
+    map.set(p.en, p);
+    map.set(p.ko, p);
+  }
+  return map;
+})();
+
+function applyAutoI18n(root = document) {
+  if (!root || !root.querySelectorAll) return;
+  const targetLang = currentLang === 'ko' ? 'ko' : 'en';
+
+  // Translate placeholders (inputs / textareas)
+  for (const el of root.querySelectorAll('input[placeholder], textarea[placeholder]')) {
+    const ph = (el.getAttribute('placeholder') || '').trim();
+    const pair = AUTO_I18N_LOOKUP.get(ph);
+    if (pair) el.setAttribute('placeholder', pair[targetLang]);
+  }
+
+  // Translate leaf text nodes (elements with no child elements)
+  for (const el of root.querySelectorAll('*')) {
+    if (el.children && el.children.length) continue;
+    if (!el.textContent) continue;
+    const txt = el.textContent.trim();
+    if (!txt) continue;
+    const pair = AUTO_I18N_LOOKUP.get(txt);
+    if (pair) el.textContent = pair[targetLang];
+  }
+}
 window.setLanguage = (lang) => {
   if (lang !== 'ko' && lang !== 'en') return;
   currentLang = lang;
@@ -113,6 +216,10 @@ function applyLanguageToUI() {
     const closeBtn = devOverlay.querySelector('button');
     if (closeBtn) closeBtn.textContent = currentLang === 'ko' ? '닫기' : 'Close';
   }
+
+  // Finally, auto-translate remaining static UI strings & placeholders.
+  // This is what makes the whole UI actually switch languages.
+  try { applyAutoI18n(document); } catch (_) {}
 }
 
 // Release Notes / Developer Log (Settings에서 언제든 확인 가능)
@@ -125,15 +232,15 @@ const RELEASE_NOTES = [
       ko: [
         '모든 종목의 스크램블 이미지 표기',
         '모든 종목의 스크램블 로직 고도화',
-        '멀티블라인드 스코어 입력 기능 추가',
         '타이머 오차가 있던 현상 수정',
+        '멀티블라인드 스코어 입력 기능 추가',
         '영어 및 한국어 지원',
       ],
       en: [
         'Scramble image display for all events',
         'Improved scramble logic for all events',
-        'Added multi-blind (MBF) score input',
         'Fixed timer accuracy issue',
+        'Added multi-blind score input',
         'Korean & English language support',
       ]
     }
@@ -1676,7 +1783,26 @@ window.useThisScramble = () => { let s=solves.find(x=>x.id===selectedSolveId); i
 precisionToggle.onchange = e => { precision = e.target.checked?3:2; updateUI(); timerEl.innerText=(0).toFixed(precision); saveData(); };
 avgModeToggle.onchange = e => { isAo5Mode = e.target.checked; updateUI(); saveData(); };
 manualEntryToggle.onchange = e => { isManualMode = e.target.checked; timerEl.classList.toggle('hidden', isManualMode); manualInput.classList.toggle('hidden', !isManualMode); statusHint.innerText = isManualMode ? (currentLang === 'ko' ? '시간 입력 후 Enter' : 'Type time & Enter') : t('holdToReady'); };
-document.getElementById('clearHistoryBtn').onclick = () => { const sid = getCurrentSessionId(); const msg = `Clear all history for this session?`; const customConfirm = document.createElement('div'); customConfirm.id = 'clearConfirmModal'; customConfirm.innerHTML = `<div class="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4"><div class="bg-white dark:bg-slate-900 rounded-2xl p-6 w-full max-w-xs shadow-2xl"><p class="text-sm font-bold text-slate-700 dark:text-white mb-6 text-center">${msg}</p><div class="flex gap-2"><button id="cancelClear" class="flex-1 py-3 text-slate-400 font-bold text-sm">Cancel</button><button id="confirmClear" class="flex-1 py-3 bg-red-500 text-white rounded-xl font-bold text-sm">Clear All</button></div></div></div>`; document.body.appendChild(customConfirm); document.getElementById('cancelClear').onclick = () => { document.body.removeChild(document.getElementById('clearConfirmModal')); }; document.getElementById('confirmClear').onclick = () => { solves = solves.filter(s => !(s.event === currentEvent && s.sessionId === sid)); updateUI(); saveData(); document.body.removeChild(document.getElementById('clearConfirmModal')); timerEl.innerText = (0).toFixed(precision); resetPenalty(); }; };
+document.getElementById('clearHistoryBtn').onclick = () => {
+  const sid = getCurrentSessionId();
+  const msg = 'Clear all history for this session?';
+  const customConfirm = document.createElement('div');
+  customConfirm.id = 'clearConfirmModal';
+  customConfirm.innerHTML = `<div class="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4"><div class="bg-white dark:bg-slate-900 rounded-2xl p-6 w-full max-w-xs shadow-2xl"><p class="text-sm font-bold text-slate-700 dark:text-white mb-6 text-center">${msg}</p><div class="flex gap-2"><button id="cancelClear" class="flex-1 py-3 text-slate-400 font-bold text-sm">Cancel</button><button id="confirmClear" class="flex-1 py-3 bg-red-500 text-white rounded-xl font-bold text-sm">Clear All</button></div></div></div>`;
+  document.body.appendChild(customConfirm);
+  try { applyAutoI18n(customConfirm); } catch (_) {}
+  document.getElementById('cancelClear').onclick = () => {
+    document.body.removeChild(document.getElementById('clearConfirmModal'));
+  };
+  document.getElementById('confirmClear').onclick = () => {
+    solves = solves.filter(s => !(s.event === currentEvent && s.sessionId === sid));
+    updateUI();
+    saveData();
+    document.body.removeChild(document.getElementById('clearConfirmModal'));
+    timerEl.innerText = (0).toFixed(precision);
+    resetPenalty();
+  };
+};
 loadData();
 applyLanguageToUI();
 changeEvent(currentEvent);
