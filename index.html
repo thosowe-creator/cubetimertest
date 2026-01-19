@@ -41,7 +41,7 @@
     <script src="https://cdn.cubing.net/v0/js/scramble-display" type="module"></script>
 
 </head>
-<body class="h-screen flex flex-col bg-slate-50 dark:bg-slate-950 text-slate-800 dark:text-slate-200 overflow-hidden transition-colors duration-200">
+<body class="min-h-screen flex flex-col bg-slate-50 dark:bg-slate-950 text-slate-800 dark:text-slate-200 transition-colors duration-200">
 
     <!-- Header (PC & Mobile shared, layout adjusts) -->
     <header class="w-full h-14 md:h-16 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 px-4 md:px-6 flex items-center justify-between z-40 shrink-0 transition-colors duration-200">
@@ -308,7 +308,7 @@
 
     <!-- Main Content -->
     <!-- Added id='mainContent' and pb-20 for mobile bottom nav space -->
-    <main id="mainContent" class="main-container flex flex-col md:flex-row p-4 gap-6 flex-grow overflow-y-auto md:overflow-hidden pb-24 md:pb-4">
+    <main id="mainContent" class="main-container flex flex-col md:flex-row p-4 gap-6 flex-grow overflow-y-auto pb-24 md:pb-4">
         
         <!-- Timer View Section (Shown by default on Mobile/Desktop) -->
         <div id="timerSection" class="flex-grow flex flex-col items-center justify-between h-full order-1 w-full">
@@ -433,7 +433,7 @@
             </div>
 
             <!-- Buttons: Penalty/Delete -->
-            <div class="w-full max-w-xl flex justify-center gap-4 mt-2 mb-6">
+            <div id="penaltyBar" class="w-full max-w-xl flex justify-center gap-4 mt-2 mb-6 md:static sticky bottom-[calc(4rem+env(safe-area-inset-bottom))] bg-slate-50/80 dark:bg-slate-950/80 backdrop-blur px-2 py-3 rounded-2xl border border-slate-100 dark:border-slate-800">
                 <button id="plus2Btn" class="penalty-btn inactive" onclick="togglePenalty('+2')">+2</button>
                 <button id="dnfBtn" class="penalty-btn inactive" onclick="togglePenalty('DNF')">DNF</button>
             </div>
