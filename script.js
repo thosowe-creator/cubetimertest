@@ -246,7 +246,21 @@ let i18nObserver = null;
 let i18nRaf = 0;
 function ensureI18nObserver() {
   if (i18nObserver) return;
-  const debounced = () => {
+  const debounced = (mutations) => {
+    // History list can re-render frequently (lazy loading / filtering).
+    // Avoid re-running i18n on every history DOM mutation for performance.
+    try {
+      if (Array.isArray(mutations)) {
+        const hl = document.getElementById('historyList');
+        if (hl) {
+          for (const m of mutations) {
+            const t = m && m.target;
+            if (t && hl.contains(t)) return;
+          }
+        }
+      }
+    } catch (_) {}
+
     if (i18nRaf) cancelAnimationFrame(i18nRaf);
     i18nRaf = requestAnimationFrame(() => {
       try { applyAutoI18n(document); } catch (_) {}
@@ -371,8 +385,9 @@ const KNOWN_ISSUES = [
   }
 ];
 // Lazy Loading Vars
-let displayedSolvesCount = 50;
-const SOLVES_BATCH_SIZE = 50;
+// Keep initial render light for faster load + shorter first screen.
+let displayedSolvesCount = 15;
+const SOLVES_BATCH_SIZE = 20;
 let btDevice = null;
 let btCharacteristic = null;
 let isBtConnected = false;
