@@ -1,10 +1,61 @@
-body { font-family: 'Inter', system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; touch-action: manipulation; }
-.timer-display { font-family: 'Space Grotesk', 'Inter', system-ui, sans-serif; font-size: clamp(4.5rem, 18vw, 11rem); font-weight: 700; line-height: 1; transition: color 0.1s; font-variant-numeric: tabular-nums; }
-.manual-input { font-family: 'Space Grotesk', 'Inter', system-ui, sans-serif; font-size: clamp(2.75rem, 12vw, 6.5rem); background: transparent; border: none; outline: none; text-align: center; width: 100%; font-variant-numeric: tabular-nums; }
+html, body { height: 100%; }
+body {
+  font-family: 'Inter', system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+  font-weight: 400;
+  touch-action: manipulation;
+  overflow: hidden; /* prevent page scroll (spacebar / layout growth) */
+}
+
+.timer-display {
+  font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  font-size: clamp(4.8rem, 18vw, 11.5rem);
+  font-weight: 500; /* thinner than 700 */
+  line-height: 1;
+  transition: color 0.1s;
+}
+
+.manual-input {
+  font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  font-size: clamp(2.8rem, 12vw, 6.2rem);
+  font-weight: 500;
+  background: transparent;
+  border: none;
+  outline: none;
+  text-align: center;
+  width: 100%;
+}
+
+/* Keep the app in the viewport and let only internal panels scroll */
+.main-container {
+  height: calc(100dvh - 3.5rem - 4rem - env(safe-area-inset-bottom));
+  overflow: hidden;
+}
+@media (min-width: 768px) {
+  .main-container {
+    height: calc(100dvh - 4rem);
+  }
+}
 .modal-overlay { background: rgba(15, 23, 42, 0.4); backdrop-filter: blur(8px); display: none; position: fixed; inset: 0; z-index: 50; align-items: center; justify-content: center; padding: 1rem; }
 .modal-overlay.active { display: flex; }
-.history-panel { border-radius: 1.5rem; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05); }
-@media (min-width: 768px) { .history-panel { height: calc(100vh - 120px); } }
+.history-panel { border-radius: 1.5rem; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05); height: 100%; }
+@media (min-width: 768px) { .history-panel { height: calc(100dvh - 120px); } }
+
+/* Smaller-height screens: compress paddings and reserved blocks so everything fits without page scroll */
+@media (max-height: 700px) {
+  .scramble-bottom-area { height: 150px; }
+  .scramble-diagram { width: 240px; height: 150px; }
+  .scramble-skeleton { width: 240px; height: 150px; }
+  #toolContainer { min-height: 150px !important; }
+  .timer-display { font-size: clamp(4.3rem, 16vw, 10rem); }
+}
+
+@media (max-height: 620px) {
+  .scramble-bottom-area { height: 120px; }
+  .scramble-diagram { width: 220px; height: 120px; }
+  .scramble-skeleton { width: 220px; height: 120px; }
+  #toolContainer { min-height: 120px !important; }
+  .timer-display { font-size: clamp(3.8rem, 15vw, 9.2rem); }
+}
 .custom-scroll::-webkit-scrollbar { width: 5px; }
 .custom-scroll::-webkit-scrollbar-track { background: transparent; }
 .custom-scroll::-webkit-scrollbar-thumb { background: #e2e8f0; border-radius: 10px; }
@@ -114,55 +165,31 @@ body.no-scroll { overflow: hidden; }
 
 /* Reserve space below scramble text to prevent timer shift */
 .scramble-bottom-area{
-  height: var(--scramble-bottom-h, 190px);
+  height:190px;
 }
 @media (min-width: 768px){
   .scramble-bottom-area{
-  height: var(--scramble-bottom-h, 190px);
-}
-}
-
-/* === Responsive Budgets === */
-
-:root{
-  --scramble-bottom-h: 190px;
-  --tool-min-h: 190px;
-  --timer-scale: 1;
-}
-
-@media (min-width: 768px){
-  :root{
-    --scramble-bottom-h: 220px;
-    --tool-min-h: 220px;
+    height:220px;
   }
 }
 
-/* Reserve space below scramble text (dynamic via JS var) */
-.scramble-bottom-area{
-  height: var(--scramble-bottom-h);
+/* Height-based responsive compression (keeps UI in view without page scroll) */
+@media (max-height: 760px) {
+  .scramble-bottom-area { height: 150px; }
+  #toolContainer { min-height: 150px !important; }
+  .timer-display { font-size: clamp(4.2rem, 16vw, 10.5rem); }
 }
 
-/* Tool container height becomes dynamic so long scrambles don't push/overlap */
-#toolContainer{
-  min-height: var(--tool-min-h) !important;
+@media (max-height: 680px) {
+  .scramble-bottom-area { height: 120px; }
+  #toolContainer { min-height: 120px !important; }
+  .scramble-diagram, .scramble-skeleton { width: 220px; height: 160px; }
+  .timer-display { font-size: clamp(3.8rem, 15vw, 9.5rem); }
 }
 
-/* Blend surfaces with page background to avoid a 'white line' overlap look */
-#scrambleBox,
-#toolContainer,
-.scramble-box{
-  background: transparent;
-}
-
-/* Timer always stays visually above other cards */
-#timerDisplayContainer{
-  position: relative;
-  z-index: 20;
-}
-
-/* Bigger timer by default; JS adjusts --timer-scale when scramble grows */
-.timer-display{
-  font-size: clamp(5rem, 18vw, 12rem);
-  transform: scale(var(--timer-scale));
-  transform-origin: center;
+@media (max-height: 610px) {
+  .scramble-bottom-area { height: 90px; }
+  #toolContainer { min-height: 90px !important; }
+  .scramble-diagram, .scramble-skeleton { width: 200px; height: 140px; }
+  .timer-display { font-size: clamp(3.4rem, 14vw, 8.5rem); }
 }
