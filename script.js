@@ -27,28 +27,152 @@ let inspectionPenalty = null; // null, '+2', 'DNF'
 let hasSpoken8 = false;
 let hasSpoken12 = false;
 let lastStopTimestamp = 0;
-// Release Notes / Known Issues (Settings에서 언제든 확인 가능)
-const APP_VERSION = '1.1.2';
+// i18n (Korean / English)
+let currentLang = (localStorage.getItem('lang') || '').toLowerCase();
+if (currentLang !== 'ko' && currentLang !== 'en') {
+  const nav = (navigator.language || '').toLowerCase();
+  currentLang = nav.startsWith('ko') ? 'ko' : 'en';
+}
+const I18N = {
+  ko: {
+    language: '언어',
+    updateLog: '업데이트',
+    latest: '최신',
+    okGotIt: '확인',
+    devLog: '개발자 로그',
+    noDevLog: '현재 등록된 개발자 로그가 없습니다.',
+    devSince: '시작:',
+    scrambleLoading: '스크램블 로딩 중…',
+    scrambleRetry: '실패. 탭해서 재시도',
+    holdToReady: '길게 눌러 Ready',
+    ready: 'Ready',
+    running: 'RUNNING',
+    stopped: 'STOPPED',
+  },
+  en: {
+    language: 'Language',
+    updateLog: 'Update Log',
+    latest: 'Latest',
+    okGotIt: 'Okay, got it!',
+    devLog: 'Developer Log',
+    noDevLog: 'No developer logs currently.',
+    devSince: 'Since:',
+    scrambleLoading: 'Loading scramble…',
+    scrambleRetry: 'Failed. Tap to retry.',
+    holdToReady: 'Hold to Ready',
+    ready: 'Ready',
+    running: 'RUNNING',
+    stopped: 'STOPPED',
+  }
+};
+function t(key) {
+  const table = I18N[currentLang] || I18N.ko;
+  return table[key] ?? key;
+}
+window.setLanguage = (lang) => {
+  if (lang !== 'ko' && lang !== 'en') return;
+  currentLang = lang;
+  localStorage.setItem('lang', lang);
+  applyLanguageToUI();
+  // Refresh modals content if open
+  try { renderUpdateLog(true); } catch (_) {}
+  try {
+    const overlay = document.getElementById('knownIssuesOverlay');
+    if (overlay && overlay.classList.contains('active')) window.openKnownIssues();
+  } catch (_) {}
+};
+function applyLanguageToUI() {
+  document.documentElement.lang = currentLang;
+  const langSelect = document.getElementById('langSelect');
+  if (langSelect) langSelect.value = currentLang;
+  const langLabel = document.getElementById('langLabel');
+  if (langLabel) langLabel.textContent = t('language');
+  const scrambleLoadingText = document.getElementById('scrambleLoadingText');
+  if (scrambleLoadingText) scrambleLoadingText.textContent = t('scrambleLoading');
+  const scrambleRetryBtn = document.getElementById('scrambleRetryBtn');
+  if (scrambleRetryBtn) scrambleRetryBtn.textContent = t('scrambleRetry');
+  const statusHint = document.getElementById('statusHint');
+  if (statusHint && !isRunning && !isReady) statusHint.textContent = t('holdToReady');
+
+  // Update Log modal labels
+  const updateOverlay = document.getElementById('updateLogOverlay');
+  if (updateOverlay) {
+    const title = updateOverlay.querySelector('h3');
+    if (title) title.textContent = t('updateLog');
+    const latestLabel = updateOverlay.querySelector('.tracking-widest');
+    if (latestLabel) latestLabel.textContent = t('latest');
+    const okBtn = updateOverlay.querySelector('button');
+    if (okBtn) okBtn.textContent = t('okGotIt');
+  }
+
+  // Developer Log modal labels
+  const devOverlay = document.getElementById('knownIssuesOverlay');
+  if (devOverlay) {
+    const title = devOverlay.querySelector('h3');
+    if (title) title.textContent = t('devLog');
+    const closeBtn = devOverlay.querySelector('button');
+    if (closeBtn) closeBtn.textContent = currentLang === 'ko' ? '닫기' : 'Close';
+  }
+}
+
+// Release Notes / Developer Log (Settings에서 언제든 확인 가능)
+const APP_VERSION = '2';
 const RELEASE_NOTES = [
-    {
-        version: '1.1.2',
-        date: '2026-01-19',
-        items: [
-            '종목 변경/스크램블 로딩 중 Loading UI 추가 + 레이스 컨디션(겹침/늦게 덮어쓰기) 방지',
-            'Multi-BLD(333mbf) WCA식 결과 입력/저장/표시 추가',
-            'Update Log / Known Issues를 Settings에서 확인 가능하도록 개선',
-        ]
-    },
-    {
-        version: '1.1.1',
-        date: '2026-01-??',
-        items: [
-            '스페이스바를 통한 측정 불가 현상 수정',
-        ]
+  {
+    version: '2',
+    date: '2026.01.19',
+    items: {
+      ko: [
+        '모든 종목의 스크램블 이미지 표기',
+        '모든 종목의 스크램블 로직 고도화',
+        '멀티블라인드 스코어 입력 기능 추가',
+        '타이머 오차가 있던 현상 수정',
+        '영어 및 한국어 지원',
+      ],
+      en: [
+        'Scramble image display for all events',
+        'Improved scramble logic for all events',
+        'Added multi-blind (MBF) score input',
+        'Fixed timer accuracy issue',
+        'Korean & English language support',
+      ]
     }
+  },
+  {
+    version: '1.1.1',
+    date: '2025.12.22',
+    items: {
+      ko: ['스페이스바를 통한 측정 불가 현상 수정'],
+      en: ['Fixed issue where timing did not work via Space key'],
+    }
+  },
+  {
+    version: '1.1',
+    date: '2025.12.21',
+    items: {
+      ko: ['모바일 UI 개선', '인스펙션 기능 추가 (설정 탭)', '간 타이머 로직 수정'],
+      en: ['Improved mobile UI', 'Added WCA inspection (Settings)', 'Adjusted GAN timer logic'],
+    }
+  },
+  {
+    version: 'BETA',
+    date: '2025.12.20',
+    items: {
+      ko: ['BETA 공개'],
+      en: ['BETA release'],
+    }
+  }
 ];
 const KNOWN_ISSUES = [
-    // 필요시 운영 중 추가
+  {
+    id: 'DL-001',
+    title: {
+      ko: '모바일 UI가 여전히 모바일친화적이지 않아 수정 계획중입니다.',
+      en: 'Mobile UI is still not fully mobile-friendly; improvements are planned.',
+    },
+    status: 'planning',
+    since: '2026.01.19'
+  }
 ];
 // Lazy Loading Vars
 let displayedSolvesCount = 50;
@@ -173,12 +297,19 @@ function renderUpdateLog(latestOnly = true) {
     const versionEl = document.getElementById('updateVersion');
     const listEl = document.getElementById('updateList');
     if (!overlay || !versionEl || !listEl) return;
+
     const notes = latestOnly ? RELEASE_NOTES.slice(0, 1) : RELEASE_NOTES;
     const latest = RELEASE_NOTES[0];
-    versionEl.innerText = latest ? `v${latest.version}` : `v${APP_VERSION}`;
+
+    // Emphasize V2 in the badge
+    const badgeText = latest ? (latest.version === '2' ? `V${latest.version}` : `v${latest.version}`) : `v${APP_VERSION}`;
+    versionEl.innerText = badgeText;
+    versionEl.classList.toggle('text-sm', latest && latest.version === '2');
+    versionEl.classList.toggle('px-3', latest && latest.version === '2');
+
     listEl.innerHTML = notes.map((r, idx) => {
-        const header = latestOnly ? '' : `<li class="list-none -ml-4 mb-1"><span class="text-[11px] font-black text-slate-500 dark:text-slate-400">v${r.version} · ${r.date}</span></li>`;
-        const items = (r.items || []).map(it => `<li>${it}</li>`).join('');
+        const header = latestOnly ? '' : `<li class="list-none -ml-4 mb-1"><span class="text-[11px] font-black text-slate-500 dark:text-slate-400">${r.date} · ${r.version === '2' ? 'V2' : 'v' + r.version}</span></li>`;
+        const items = (r.items && (r.items[currentLang] || r.items.ko) ? (r.items[currentLang] || r.items.ko) : []).map(it => `<li>${it}</li>`).join('');
         return `${header}${items}${idx < notes.length - 1 ? '<li class="list-none -ml-4 my-3 border-t border-slate-100 dark:border-slate-800"></li>' : ''}`;
     }).join('');
 }
@@ -207,11 +338,13 @@ window.openKnownIssues = () => {
     const listEl = document.getElementById('knownIssuesList');
     if (!overlay || !listEl) return;
     if (!KNOWN_ISSUES.length) {
-        listEl.innerHTML = `<li class="p-3 bg-slate-50 dark:bg-slate-800 rounded-xl border border-slate-100 dark:border-slate-700 text-xs font-bold text-slate-400">No known issues currently.</li>`;
+        listEl.innerHTML = `<li class="p-3 bg-slate-50 dark:bg-slate-800 rounded-xl border border-slate-100 dark:border-slate-700 text-xs font-bold text-slate-400">${t('noDevLog')}</li>`;
     } else {
         listEl.innerHTML = KNOWN_ISSUES.map(ki => {
             const status = ki.status ? String(ki.status) : 'open';
-            return `<li class="p-3 bg-slate-50 dark:bg-slate-800 rounded-xl border border-slate-100 dark:border-slate-700"><div class="flex items-center justify-between"><span class="text-[11px] font-black text-slate-700 dark:text-slate-200">${ki.title || ki.id || 'Issue'}</span><span class="text-[10px] font-black text-slate-400 uppercase">${status}</span></div><div class="mt-1 text-[10px] font-bold text-slate-400">Since: ${ki.since || '-'}</div></li>`;
+            const titleObj = ki.title || {};
+            const title = (typeof titleObj === 'string') ? titleObj : (titleObj[currentLang] || titleObj.ko || ki.id || 'Log');
+            return `<li class="p-3 bg-slate-50 dark:bg-slate-800 rounded-xl border border-slate-100 dark:border-slate-700"><div class="flex items-center justify-between"><span class="text-[11px] font-black text-slate-700 dark:text-slate-200">${title}</span><span class="text-[10px] font-black text-slate-400 uppercase">${status}</span></div><div class="mt-1 text-[10px] font-bold text-slate-400">${t('devSince')} ${ki.since || '-'}</div></li>`;
         }).join('');
     }
     overlay.classList.add('active');
@@ -519,7 +652,7 @@ function stopTimer(forcedTime = null) {
             event: currentEvent,
             sessionId: getCurrentSessionId(),
             penalty: finalPenalty,
-            date: new Date().toLocaleDateString('ko-KR', { year: 'numeric', month: '2-digit', day: '2-digit' }).replace(/\.$/, "")
+            date: new Date().toLocaleDateString(currentLang === 'ko' ? 'ko-KR' : 'en-US', { year: 'numeric', month: '2-digit', day: '2-digit' }).replace(/\.$/, "")
         });
         if (finalPenalty === 'DNF') {
             timerEl.innerText = "DNF";
@@ -1191,7 +1324,7 @@ window.openMbfResultModal = ({ defaultTimeMs } = {}) => {
         id: Date.now(),
         event: '333mbf',
         sessionId: getCurrentSessionId(),
-        date: new Date().toLocaleDateString('ko-KR', { year: 'numeric', month: '2-digit', day: '2-digit' }).replace(/\.$/, ""),
+        date: new Date().toLocaleDateString(currentLang === 'ko' ? 'ko-KR' : 'en-US', { year: 'numeric', month: '2-digit', day: '2-digit' }).replace(/\.$/, ""),
         scramble: currentScramble || 'Multi-Blind',
         time: (defaultTimeMs != null ? defaultTimeMs : null),
         penalty: null,
@@ -1472,12 +1605,12 @@ window.saveSessionName = (id) => { const input = document.getElementById('editSe
 window.createNewSession = () => { const nameInput = document.getElementById('newSessionName'); const name = nameInput.value.trim() || `Session ${sessions[currentEvent].length + 1}`; if (sessions[currentEvent].length >= 10) return; sessions[currentEvent].forEach(s => s.isActive = false); sessions[currentEvent].push({ id: Date.now(), name: name, isActive: true }); nameInput.value = ""; renderSessionList(); updateUI(); saveData(); timerEl.innerText = (0).toFixed(precision); resetPenalty(); };
 window.switchSession = (id) => { sessions[currentEvent].forEach(s => s.isActive = (s.id === id)); renderSessionList(); updateUI(); saveData(); timerEl.innerText = (0).toFixed(precision); resetPenalty(); closeSessionModal(); };
 window.deleteSession = (id) => { const eventSessions = sessions[currentEvent]; if (!eventSessions || eventSessions.length <= 1) return; const targetIdx = eventSessions.findIndex(s => s.id === id); if (targetIdx === -1) return; const wasActive = eventSessions[targetIdx].isActive; sessions[currentEvent] = eventSessions.filter(s => s.id !== id); solves = solves.filter(s => !(s.event === currentEvent && s.sessionId === id)); if (wasActive && sessions[currentEvent].length > 0) sessions[currentEvent][0].isActive = true; renderSessionList(); updateUI(); saveData(); };
-window.openAvgShare = (type) => { const sid = getCurrentSessionId(); const count = (type === 'primary') ? (isAo5Mode ? 5 : 3) : 12; const filtered = solves.filter(s => s.event === currentEvent && s.sessionId === sid); if (filtered.length < count) return; const list = filtered.slice(0, count); const avgValue = calculateAvg(filtered, count, (type === 'primary' && !isAo5Mode)); const dateStr = list[0].date || new Date().toLocaleDateString('ko-KR', { year: 'numeric', month: '2-digit', day: '2-digit' }).replace(/\.$/, ""); document.getElementById('shareDate').innerText = `Date : ${dateStr}.`; document.getElementById('shareLabel').innerText = (type === 'primary' && !isAo5Mode) ? `Mean of 3 :` : `Average of ${count} :`; document.getElementById('shareAvg').innerText = avgValue; const listContainer = document.getElementById('shareList'); listContainer.innerHTML = list.map((s, idx) => `<div class="flex flex-col p-3 bg-slate-50 dark:bg-slate-800 rounded-xl border border-slate-100 dark:border-slate-700"><div class="flex items-center gap-3"><span class="text-[10px] font-bold text-slate-400 w-4">${count - idx}.</span><span class="font-bold text-slate-800 dark:text-slate-200 text-sm min-w-[50px]">${s.penalty==='DNF'?'DNF':formatTime(s.penalty==='+2'?s.time+2000:s.time)}${s.penalty==='+2'?'+':''}</span><span class="text-[10px] text-slate-400 font-medium italic truncate flex-grow">${s.scramble}</span></div></div>`).reverse().join(''); document.getElementById('avgShareOverlay').classList.add('active'); };
+window.openAvgShare = (type) => { const sid = getCurrentSessionId(); const count = (type === 'primary') ? (isAo5Mode ? 5 : 3) : 12; const filtered = solves.filter(s => s.event === currentEvent && s.sessionId === sid); if (filtered.length < count) return; const list = filtered.slice(0, count); const avgValue = calculateAvg(filtered, count, (type === 'primary' && !isAo5Mode)); const dateStr = list[0].date || new Date().toLocaleDateString(currentLang === 'ko' ? 'ko-KR' : 'en-US', { year: 'numeric', month: '2-digit', day: '2-digit' }).replace(/\.$/, ""); document.getElementById('shareDate').innerText = `Date : ${dateStr}.`; document.getElementById('shareLabel').innerText = (type === 'primary' && !isAo5Mode) ? `Mean of 3 :` : `Average of ${count} :`; document.getElementById('shareAvg').innerText = avgValue; const listContainer = document.getElementById('shareList'); listContainer.innerHTML = list.map((s, idx) => `<div class="flex flex-col p-3 bg-slate-50 dark:bg-slate-800 rounded-xl border border-slate-100 dark:border-slate-700"><div class="flex items-center gap-3"><span class="text-[10px] font-bold text-slate-400 w-4">${count - idx}.</span><span class="font-bold text-slate-800 dark:text-slate-200 text-sm min-w-[50px]">${s.penalty==='DNF'?'DNF':formatTime(s.penalty==='+2'?s.time+2000:s.time)}${s.penalty==='+2'?'+':''}</span><span class="text-[10px] text-slate-400 font-medium italic truncate flex-grow">${s.scramble}</span></div></div>`).reverse().join(''); document.getElementById('avgShareOverlay').classList.add('active'); };
 window.openSingleShare = () => {
     const s = solves.find(x => x.id === selectedSolveId);
     if (!s) return;
     closeModal();
-    const dateStr = s.date || new Date().toLocaleDateString('ko-KR', { year: 'numeric', month: '2-digit', day: '2-digit' }).replace(/\.$/, "");
+    const dateStr = s.date || new Date().toLocaleDateString(currentLang === 'ko' ? 'ko-KR' : 'en-US', { year: 'numeric', month: '2-digit', day: '2-digit' }).replace(/\.$/, "");
     document.getElementById('shareDate').innerText = `Date : ${dateStr}.`;
     document.getElementById('shareLabel').innerText = `Single :`;
 
@@ -1495,7 +1628,7 @@ window.openSingleShare = () => {
 };
 window.closeAvgShare = () => document.getElementById('avgShareOverlay').classList.remove('active');
 window.copyShareText = () => { const date = document.getElementById('shareDate').innerText; const avgLabel = document.getElementById('shareLabel').innerText; const avgVal = document.getElementById('shareAvg').innerText; const isSingle = avgLabel.includes('Single'); let text = `[CubeTimer]\n\n${date}\n\n${avgLabel} ${avgVal}\n\n`; if (isSingle) { const s = solves.find(x => x.id === selectedSolveId); if (s) text += `1. ${avgVal}   ${s.scramble}\n`; } else { const count = avgLabel.includes('5') ? 5 : (avgLabel.includes('3') ? 3 : 12); const sid = getCurrentSessionId(); const filtered = solves.filter(s => s.event === currentEvent && s.sessionId === sid).slice(0, count); filtered.reverse().forEach((s, i) => { text += `${i+1}. ${s.penalty==='DNF'?'DNF':formatTime(s.penalty==='+2'?s.time+2000:s.time)}${s.penalty==='+2'?'+':''}   ${s.scramble}\n`; }); } const textArea = document.createElement("textarea"); textArea.value = text; document.body.appendChild(textArea); textArea.select(); try { document.execCommand('copy'); const btn = document.querySelector('[onclick="copyShareText()"]'); const original = btn.innerHTML; btn.innerHTML = "Copied!"; btn.classList.add('bg-green-600'); setTimeout(() => { btn.innerHTML = original; btn.classList.remove('bg-green-600'); }, 2000); } catch (err) { console.error('Copy failed', err); } document.body.removeChild(textArea); };
-window.addEventListener('keydown', e => { if(editingSessionId || document.activeElement.tagName === 'INPUT') { if(e.code === 'Enter' && document.activeElement === manualInput) {} else { return; } } if(e.code==='Space' && !e.repeat) { e.preventDefault(); handleStart(e); } if(isManualMode && e.code==='Enter') { let v = parseFloat(manualInput.value); if(v>0) { solves.unshift({ id:Date.now(), time:v*1000, scramble:currentScramble, event:currentEvent, sessionId: getCurrentSessionId(), penalty:null, date: new Date().toLocaleDateString('ko-KR', { year: 'numeric', month: '2-digit', day: '2-digit' }).replace(/\.$/, "") }); manualInput.value=""; updateUI(); generateScramble(); saveData(); } } });
+window.addEventListener('keydown', e => { if(editingSessionId || document.activeElement.tagName === 'INPUT') { if(e.code === 'Enter' && document.activeElement === manualInput) {} else { return; } } if(e.code==='Space' && !e.repeat) { e.preventDefault(); handleStart(e); } if(isManualMode && e.code==='Enter') { let v = parseFloat(manualInput.value); if(v>0) { solves.unshift({ id:Date.now(), time:v*1000, scramble:currentScramble, event:currentEvent, sessionId: getCurrentSessionId(), penalty:null, date: new Date().toLocaleDateString(currentLang === 'ko' ? 'ko-KR' : 'en-US', { year: 'numeric', month: '2-digit', day: '2-digit' }).replace(/\.$/, "") }); manualInput.value=""; updateUI(); generateScramble(); saveData(); } } });
 window.addEventListener('keyup', e => { if(e.code==='Space' && !editingSessionId) handleEnd(e); });
 const interactiveArea = document.getElementById('timerInteractiveArea');
 interactiveArea.addEventListener('touchstart', handleStart, { passive: false });
@@ -1542,9 +1675,10 @@ window.closeModal = () => document.getElementById('modalOverlay').classList.remo
 window.useThisScramble = () => { let s=solves.find(x=>x.id===selectedSolveId); if(s){currentScramble=s.scramble; scrambleEl.innerText=currentScramble; closeModal();} };
 precisionToggle.onchange = e => { precision = e.target.checked?3:2; updateUI(); timerEl.innerText=(0).toFixed(precision); saveData(); };
 avgModeToggle.onchange = e => { isAo5Mode = e.target.checked; updateUI(); saveData(); };
-manualEntryToggle.onchange = e => { isManualMode = e.target.checked; timerEl.classList.toggle('hidden', isManualMode); manualInput.classList.toggle('hidden', !isManualMode); statusHint.innerText = isManualMode ? "TYPE TIME & ENTER" : "HOLD TO READY"; };
+manualEntryToggle.onchange = e => { isManualMode = e.target.checked; timerEl.classList.toggle('hidden', isManualMode); manualInput.classList.toggle('hidden', !isManualMode); statusHint.innerText = isManualMode ? (currentLang === 'ko' ? '시간 입력 후 Enter' : 'Type time & Enter') : t('holdToReady'); };
 document.getElementById('clearHistoryBtn').onclick = () => { const sid = getCurrentSessionId(); const msg = `Clear all history for this session?`; const customConfirm = document.createElement('div'); customConfirm.id = 'clearConfirmModal'; customConfirm.innerHTML = `<div class="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4"><div class="bg-white dark:bg-slate-900 rounded-2xl p-6 w-full max-w-xs shadow-2xl"><p class="text-sm font-bold text-slate-700 dark:text-white mb-6 text-center">${msg}</p><div class="flex gap-2"><button id="cancelClear" class="flex-1 py-3 text-slate-400 font-bold text-sm">Cancel</button><button id="confirmClear" class="flex-1 py-3 bg-red-500 text-white rounded-xl font-bold text-sm">Clear All</button></div></div></div>`; document.body.appendChild(customConfirm); document.getElementById('cancelClear').onclick = () => { document.body.removeChild(document.getElementById('clearConfirmModal')); }; document.getElementById('confirmClear').onclick = () => { solves = solves.filter(s => !(s.event === currentEvent && s.sessionId === sid)); updateUI(); saveData(); document.body.removeChild(document.getElementById('clearConfirmModal')); timerEl.innerText = (0).toFixed(precision); resetPenalty(); }; };
-loadData(); 
+loadData();
+applyLanguageToUI();
 changeEvent(currentEvent);
 // Check for updates on load
 checkUpdateLog();
