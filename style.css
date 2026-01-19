@@ -1,7 +1,6 @@
 body { font-family: 'Quicksand', sans-serif; touch-action: manipulation; }
-html, body { height: 100%; }
-.timer-display { font-family: 'JetBrains+Mono', monospace; font-size: clamp(4rem, 18vw, 10rem); font-weight: 700; line-height: 1; transition: color 0.1s; }
-.manual-input { font-family: 'JetBrains+Mono', monospace; font-size: clamp(2.5rem, 12vw, 6rem); background: transparent; border: none; outline: none; text-align: center; width: 100%; }
+.timer-display { font-family: 'JetBrains Mono', monospace; font-size: clamp(4rem, 18vw, 10rem); font-weight: 700; line-height: 1; transition: color 0.1s; }
+.manual-input { font-family: 'JetBrains Mono', monospace; font-size: clamp(2.5rem, 12vw, 6rem); background: transparent; border: none; outline: none; text-align: center; width: 100%; }
 .modal-overlay { background: rgba(15, 23, 42, 0.4); backdrop-filter: blur(8px); display: none; position: fixed; inset: 0; z-index: 50; align-items: center; justify-content: center; padding: 1rem; }
 .modal-overlay.active { display: flex; }
 .history-panel { border-radius: 1.5rem; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05); }
@@ -46,48 +45,6 @@ input[type=range]::-webkit-slider-runnable-track { width: 100%; height: 4px; cur
 
 /* While timing, we intentionally prevent page scroll to avoid accidental movement */
 body.no-scroll { overflow: hidden; }
-/* Modal open: lock background scroll/gesture so scroll stays inside panels */
-body.modal-scroll-lock { overflow: hidden; }
-
-/* App-like layout: main area should not become a page-scroll container */
-#mainContent { min-height: 0; overflow: hidden; }
-
-/* Reduce padding on short screens so core controls stay visible */
-@media (max-height: 700px){
-  #mainContent{ padding: 0.75rem !important; }
-}
-#timerSection, #historySection { min-height: 0; }
-#timerContainer { min-height: 0; }
-
-/* Scramble + spacing should gracefully shrink on shorter screens */
-.scramble-box { padding: clamp(0.9rem, 2vh, 1.5rem); min-height: clamp(92px, 14vh, 140px); }
-#scramble { font-size: clamp(0.9rem, 1.7vh, 1.25rem); line-height: 1.45; }
-.scramble-bottom-area { height: clamp(80px, 16vh, 170px); }
-
-/* Settings should scroll inside itself on mobile instead of scrolling the background */
-#settingsModal { max-height: calc(100dvh - 2rem); overflow-y: auto; -webkit-overflow-scrolling: touch; overscroll-behavior: contain; }
-
-/* Height-based compression (PC small window + mobile landscape) */
-@media (max-height: 740px) {
-  /* Tailwind space-y-6 (1.5rem) -> tighter */
-  #timerSection .space-y-6 > :not([hidden]) ~ :not([hidden]) { margin-top: 1rem !important; }
-  #timerSection .mt-8 { margin-top: 1.25rem !important; }
-  #penaltyBar { margin-bottom: 0.75rem !important; }
-}
-
-@media (max-height: 620px) {
-  .scramble-box { padding: clamp(0.75rem, 1.6vh, 1.15rem); }
-  .scramble-bottom-area { height: clamp(48px, 10vh, 110px); }
-  #timerSection .space-y-6 > :not([hidden]) ~ :not([hidden]) { margin-top: 0.75rem !important; }
-  #timerSection .gap-6 { gap: 1rem !important; }
-}
-
-@media (max-height: 540px) {
-  /* If the screen is very short, prioritize timer + penalty: hide diagram area */
-  .scramble-bottom-area { display: none !important; }
-  #scramble { font-size: clamp(0.85rem, 1.5vh, 1.05rem); }
-  #penaltyBar { margin-top: 0.25rem !important; }
-}
 .avg-badge { padding: 1rem 1.5rem; border-radius: 1rem; background: white; border: 1px solid #f1f5f9; box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05); min-width: 140px; display: flex; flex-direction: column; align-items: center; cursor: pointer; transition: transform 0.1s; }
 .dark .avg-badge { background-color: #1e293b; border-color: #334155; }
 .avg-badge:active { transform: scale(0.95); }
@@ -157,73 +114,55 @@ body.modal-scroll-lock { overflow: hidden; }
 
 /* Reserve space below scramble text to prevent timer shift */
 .scramble-bottom-area{
-  /* Fixed heights cause overflow on small screens. Clamp keeps layout stable while allowing shrink. */
-  height: clamp(90px, 18vh, 190px);
+  height: var(--scramble-bottom-h, 190px);
 }
 @media (min-width: 768px){
   .scramble-bottom-area{
-    height: clamp(140px, 18vh, 220px);
+  height: var(--scramble-bottom-h, 190px);
+}
+}
+
+/* === Responsive Budgets === */
+
+:root{
+  --scramble-bottom-h: 190px;
+  --tool-min-h: 190px;
+  --timer-scale: 1;
+}
+
+@media (min-width: 768px){
+  :root{
+    --scramble-bottom-h: 220px;
+    --tool-min-h: 220px;
   }
 }
 
-/* ===== App-like responsive compression (no page scrolling) ===== */
-
-/* Flex children need min-height:0 to allow shrinking without forcing page scroll */
-#timerSection,
-#timerContainer,
-#timerInteractiveArea,
-#historySection,
-#historyList {
-  min-height: 0;
+/* Reserve space below scramble text (dynamic via JS var) */
+.scramble-bottom-area{
+  height: var(--scramble-bottom-h);
 }
 
-/* Scramble box: make padding and min-height scale with viewport height */
+/* Tool container height becomes dynamic so long scrambles don't push/overlap */
+#toolContainer{
+  min-height: var(--tool-min-h) !important;
+}
+
+/* Blend surfaces with page background to avoid a 'white line' overlap look */
+#scrambleBox,
+#toolContainer,
 .scramble-box{
-  padding: clamp(0.9rem, 2.2vh, 1.5rem) !important;
-  min-height: clamp(90px, 14vh, 140px) !important;
+  background: transparent;
 }
 
-/* Scramble text: scale with height so it doesn't push controls offscreen */
-#scramble{
-  font-size: clamp(0.9rem, 1.9vh, 1.25rem) !important;
-  line-height: 1.35 !important;
+/* Timer always stays visually above other cards */
+#timerDisplayContainer{
+  position: relative;
+  z-index: 20;
 }
 
-/* Timer display: already uses clamp(vw), but clamp with vh tends to behave better in landscape */
+/* Bigger timer by default; JS adjusts --timer-scale when scramble grows */
 .timer-display{
-  font-size: clamp(3.2rem, 10vh, 9.5rem);
-}
-
-/* Reduce large vertical margins/gaps on shorter viewports */
-@media (max-height: 740px){
-  /* Tailwind space-y-6 -> tighten */
-  #timerSection .space-y-6 > :not([hidden]) ~ :not([hidden]){ margin-top: 1rem !important; }
-  #timerSection .mt-8{ margin-top: 1.25rem !important; }
-  #timerSection .mb-6{ margin-bottom: 1rem !important; }
-}
-
-@media (max-height: 620px){
-  /* Scramble diagram area shrinks further */
-  .scramble-bottom-area{ height: clamp(60px, 12vh, 140px); }
-  #timerSection .gap-6{ gap: 1rem !important; }
-}
-
-@media (max-height: 540px){
-  /* At very small heights, hide diagram area entirely to protect controls */
-  .scramble-bottom-area{ display: none !important; }
-  #scramble{ font-size: clamp(0.85rem, 1.7vh, 1.05rem) !important; }
-  .timer-display{ font-size: clamp(3rem, 9vh, 8.5rem); }
-}
-
-/* Settings modal: scroll inside modal, background locked via body.modal-scroll-lock */
-#settingsModal{
-  max-height: calc(100dvh - 2rem);
-  overflow-y: auto;
-  -webkit-overflow-scrolling: touch;
-}
-
-/* Mobile Settings: bottom-sheet style without adding new overlay layer */
-@media (max-width: 767px){
-  #settingsOverlay{ align-items: flex-end; }
-  #settingsModal{ width: 100%; border-radius: 1.5rem 1.5rem 0 0; }
+  font-size: clamp(5rem, 18vw, 12rem);
+  transform: scale(var(--timer-scale));
+  transform-origin: center;
 }
