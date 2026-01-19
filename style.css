@@ -103,3 +103,13 @@ input[type=range]::-webkit-slider-runnable-track { width: 100%; height: 4px; cur
     height:220px;
   }
 }
+
+/* Reserve space below scramble text to prevent timer shift */
+.scramble-bottom-area{
+  height:190px;
+}
+@media (min-width: 768px){
+  .scramble-bottom-area{
+    height:220px;
+  }
+}
