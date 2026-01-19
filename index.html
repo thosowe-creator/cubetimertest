@@ -126,6 +126,36 @@
         </div>
     </div>
 
+    <!-- Multi-Blind Result Modal (WCA style input) -->
+    <div id="mbfResultOverlay" class="modal-overlay" onclick="closeMbfResultModal()">
+        <div class="bg-white dark:bg-slate-900 rounded-3xl w-full max-w-sm shadow-2xl p-6" onclick="event.stopPropagation()">
+            <div class="flex items-center justify-between mb-4">
+                <h3 class="font-bold text-slate-700 dark:text-white text-lg">MBF Result</h3>
+                <span class="text-[10px] font-black bg-blue-600 text-white px-2 py-1 rounded-md uppercase">333mbf</span>
+            </div>
+            <p class="text-[11px] text-slate-400 font-bold mb-5">WCA 형식(Attempted / Solved / Time)을 입력해 주세요.</p>
+            <div class="space-y-3">
+                <div class="flex items-center justify-between gap-3">
+                    <label class="text-xs font-bold text-slate-600 dark:text-slate-300" for="mbfAttemptedInput">Attempted</label>
+                    <input id="mbfAttemptedInput" type="number" min="1" max="999" inputmode="numeric" class="w-28 bg-slate-50 dark:bg-slate-800 dark:text-white border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-sm font-bold text-center outline-none focus:border-blue-400 transition-all" placeholder="e.g. 10">
+                </div>
+                <div class="flex items-center justify-between gap-3">
+                    <label class="text-xs font-bold text-slate-600 dark:text-slate-300" for="mbfSolvedInput">Solved</label>
+                    <input id="mbfSolvedInput" type="number" min="0" max="999" inputmode="numeric" class="w-28 bg-slate-50 dark:bg-slate-800 dark:text-white border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-sm font-bold text-center outline-none focus:border-blue-400 transition-all" placeholder="e.g. 8">
+                </div>
+                <div class="flex items-center justify-between gap-3">
+                    <label class="text-xs font-bold text-slate-600 dark:text-slate-300" for="mbfTimeInput">Time</label>
+                    <input id="mbfTimeInput" type="text" inputmode="numeric" class="w-28 bg-slate-50 dark:bg-slate-800 dark:text-white border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-sm font-bold text-center outline-none focus:border-blue-400 transition-all" placeholder="mm:ss">
+                </div>
+            </div>
+            <div id="mbfResultError" class="hidden mt-4 text-[11px] font-bold text-red-500"></div>
+            <div class="flex gap-2 mt-6">
+                <button onclick="saveMbfResult()" class="flex-1 py-3.5 bg-blue-600 text-white font-bold rounded-xl text-sm shadow-lg active:scale-95 transition-all">Save</button>
+                <button onclick="closeMbfResultModal()" class="flex-1 py-3.5 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 font-bold rounded-xl text-sm">Cancel</button>
+            </div>
+        </div>
+    </div>
+
     <!-- Detailed Stats Modal -->
     <div id="statsOverlay" class="modal-overlay" onclick="closeStatsModal()">
         <div class="bg-white dark:bg-slate-900 rounded-3xl w-full max-w-sm shadow-2xl p-6" onclick="event.stopPropagation()">
@@ -178,6 +208,15 @@
                 <div class="md:hidden flex gap-2 pt-2">
                     <button onclick="exportData()" class="flex-1 py-3 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 text-xs font-bold rounded-xl">Backup</button>
                     <button onclick="triggerImport()" class="flex-1 py-3 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 text-xs font-bold rounded-xl">Restore</button>
+                </div>
+
+                <!-- About: Release Notes / Known Issues -->
+                <div class="pt-2">
+                    <p class="text-[10px] font-black uppercase tracking-[0.2em] text-slate-300 dark:text-slate-600 mb-2">About</p>
+                    <div class="flex gap-2">
+                        <button onclick="openUpdateLog(false)" class="flex-1 py-3 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 text-xs font-bold rounded-xl">Update Log</button>
+                        <button onclick="openKnownIssues()" class="flex-1 py-3 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 text-xs font-bold rounded-xl">Known Issues</button>
+                    </div>
                 </div>
             </div>
             <button onclick="closeSettings()" class="w-full mt-8 py-3 bg-slate-800 dark:bg-slate-700 text-white font-bold rounded-xl shadow-lg text-sm">Save & Close</button>
@@ -243,6 +282,22 @@
         </div>
     </div>
 
+    <!-- Known Issues Modal -->
+    <div id="knownIssuesOverlay" class="modal-overlay" onclick="closeKnownIssues()">
+        <div class="bg-white dark:bg-slate-900 rounded-3xl w-full max-w-sm shadow-2xl p-6" onclick="event.stopPropagation()">
+            <div class="flex items-center gap-2 mb-6">
+                <div class="p-2 bg-purple-100 dark:bg-purple-900 rounded-xl">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="text-purple-600 dark:text-purple-400"><path d="M12 9v4"/><path d="M12 17h.01"/><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/></svg>
+                </div>
+                <h3 class="font-bold text-slate-700 dark:text-white text-lg">Known Issues</h3>
+            </div>
+            <div class="mb-6">
+                <ul id="knownIssuesList" class="space-y-3 text-sm font-medium text-slate-600 dark:text-slate-300"></ul>
+            </div>
+            <button onclick="closeKnownIssues()" class="w-full py-3.5 bg-slate-800 dark:bg-slate-700 text-white font-bold rounded-xl text-sm shadow-lg hover:bg-slate-700 transition-colors">Close</button>
+        </div>
+    </div>
+
     <!-- Main Content -->
     <!-- Added id='mainContent' and pb-20 for mobile bottom nav space -->
     <main id="mainContent" class="main-container flex flex-col md:flex-row p-4 gap-6 flex-grow overflow-y-auto md:overflow-hidden pb-24 md:pb-4">
@@ -278,7 +333,7 @@
                                 <option value="333mbf">Multi-BLD</option>
                             </optgroup>
                         </select>
-                        <p class="mt-2 text-[10px] text-slate-400 dark:text-slate-500 text-center">스크롤로 종목을 선택할 수 있습니다.</p>
+                        <!-- (UX) 스크롤 선택 기능은 유지하되 안내 문구는 제거 -->
                     </div>
                 </div>
 
@@ -320,7 +375,14 @@
                 <div class="text-center w-full">
                     <h2 class="text-slate-300 dark:text-slate-600 uppercase tracking-[0.2em] text-[10px] font-bold mb-3">Scramble</h2>
                     <div id="scrambleBox" class="scramble-box p-6 md:p-8 min-h-[120px] flex flex-col items-center justify-center border border-slate-100 dark:border-slate-800 rounded-3xl transition-colors">
+                        <!-- Loading UI (race-condition 방지: 즉시 이전 내용 숨김) -->
+                        <div id="scrambleLoadingRow" class="hidden items-center gap-2 mb-2">
+                            <span class="spinner"></span>
+                            <span id="scrambleLoadingText" class="text-[11px] font-bold text-slate-400">Loading scramble…</span>
+                        </div>
                         <div id="scramble" class="text-base md:text-xl font-bold text-slate-600 dark:text-slate-300 whitespace-pre-wrap text-center max-w-5xl leading-relaxed">Generating...</div>
+                        <div id="scrambleDiagramSkeleton" class="hidden mt-4 scramble-skeleton"></div>
+                        <button id="scrambleRetryBtn" onclick="retryScramble()" class="hidden mt-4 px-5 py-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 text-xs font-bold active:scale-95 transition-all">Failed. Tap to retry.</button>
                         <div id="mbfInputArea" class="hidden flex flex-col items-center gap-4 w-full">
                             <p class="text-[11px] font-bold text-slate-400 uppercase tracking-widest">Enter number of cubes</p>
                             <div class="flex gap-2 w-full max-w-xs">
