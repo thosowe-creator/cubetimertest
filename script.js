@@ -140,6 +140,13 @@ const AUTO_I18N_PAIRS = [
   { en: 'Loading scramble…', ko: '스크램블 로딩 중…' },
   { en: 'Failed. Tap to retry.', ko: '실패. 탭해서 재시도' },
   { en: 'Hold to Ready', ko: '길게 눌러 Ready' },
+
+  // Share / Settings
+  { en: 'Save & Close', ko: '저장하고 닫기' },
+  { en: 'Share Single', ko: '싱글 공유' },
+  { en: 'Copy Text', ko: '텍스트 복사' },
+  { en: 'Copied!', ko: '복사됨!' },
+  { en: 'Date :', ko: '날짜 :' },
 ];
 
 const AUTO_I18N_LOOKUP = (() => {
@@ -176,6 +183,23 @@ function applyAutoI18n(root = document) {
       const title = (el.getAttribute('title') || '').trim();
       const pairT = title ? AUTO_I18N_LOOKUP.get(title) : null;
       if (pairT) el.setAttribute('title', pairT[targetLang]);
+    }
+
+    // Translate visible value text on <input> buttons (value="...")
+    for (const el of scope.querySelectorAll('input[value]')) {
+      const type = (el.getAttribute('type') || '').toLowerCase();
+      // Only touch value for button-like inputs to avoid corrupting user data.
+      if (!['button', 'submit', 'reset'].includes(type)) continue;
+      const v = (el.getAttribute('value') || '').trim();
+      const pairV = v ? AUTO_I18N_LOOKUP.get(v) : null;
+      if (pairV) el.setAttribute('value', pairV[targetLang]);
+    }
+
+    // Translate data-* label helpers if present
+    for (const el of scope.querySelectorAll('[data-label]')) {
+      const v = (el.getAttribute('data-label') || '').trim();
+      const pairV = v ? AUTO_I18N_LOOKUP.get(v) : null;
+      if (pairV) el.setAttribute('data-label', pairV[targetLang]);
     }
   } catch (_) {}
 
@@ -1050,9 +1074,16 @@ function applyMove(move) {
 }
 function drawCube() {
     const n = cubeState.n;
+    // Only show visualizer availability messages inside the Scramble Image tool.
+    if (activeTool !== 'scramble') {
+        if (noVisualizerMsg) noVisualizerMsg.classList.add('hidden');
+        return;
+    }
     if(!n || configs[currentEvent]?.cat === 'blind') { 
         visualizerCanvas.style.display='none'; 
-        noVisualizerMsg.innerText = configs[currentEvent]?.cat === 'blind' ? "Scramble images disabled for Blind" : "Visualizer for standard cubes only";
+        noVisualizerMsg.innerText = configs[currentEvent]?.cat === 'blind'
+            ? (currentLang === 'ko' ? '블라인드 종목에서는 스크램블 이미지가 비활성화됩니다' : 'Scramble images disabled for Blind')
+            : (currentLang === 'ko' ? '기본 큐브 종목만 지원합니다' : 'Visualizer for standard cubes only');
         noVisualizerMsg.classList.remove('hidden'); 
         return; 
     }
@@ -1078,14 +1109,22 @@ window.toggleToolsMenu = (e) => { e.stopPropagation(); document.getElementById('
 window.selectTool = (tool) => {
     activeTool = tool;
     const isBlind = configs[currentEvent]?.cat === 'blind';
-    document.getElementById('toolLabel').innerText = isBlind ? 'N/A (Blind)' : (tool === 'scramble' ? 'Scramble Image' : 'Graph (Trends)');
+    document.getElementById('toolLabel').innerText = isBlind
+        ? (currentLang === 'ko' ? '해당 없음(블라인드)' : 'N/A (Blind)')
+        : (tool === 'scramble' ? (currentLang === 'ko' ? '스크램블 이미지' : 'Scramble Image') : (currentLang === 'ko' ? '그래프(추세)' : 'Graph (Trends)'));
     document.getElementById('visualizerWrapper').classList.toggle('hidden', tool !== 'scramble');
     document.getElementById('graphWrapper').classList.toggle('hidden', tool !== 'graph');
     document.querySelectorAll('.tool-option').forEach(opt => opt.classList.remove('active'));
     document.getElementById(`tool-opt-${tool}`).classList.add('active');
     document.getElementById('toolsDropdown').classList.remove('show');
+    if (tool !== 'scramble') {
+        if (noVisualizerMsg) noVisualizerMsg.classList.add('hidden');
+    }
     if (tool === 'graph') renderHistoryGraph();
-    else if (tool === 'scramble') drawCube();
+    else if (tool === 'scramble') {
+        drawCube();
+        updateScrambleDiagram();
+    }
 };
 window.addEventListener('click', () => { document.getElementById('toolsDropdown').classList.remove('show'); });
 function renderHistoryGraph() {
@@ -1207,6 +1246,8 @@ function setScrambleLoadingState(isLoading, message = 'Loading scramble…', sho
         // 종목 변경/재생성 시 이전 내용 즉시 숨김
         if (scrambleEl) scrambleEl.innerText = '';
         clearScrambleDiagram();
+        // Prevent blind-only message from sticking across events
+        if (noVisualizerMsg) noVisualizerMsg.classList.add('hidden');
     }
 }
 
@@ -1401,11 +1442,18 @@ function updateScrambleDiagram() {
     if (!scrambleDiagram) return;
     const conf = configs[currentEvent];
     const isBlind = conf && conf.cat === 'blind';
+    // Message should only be shown in Scramble Image tool.
+    if (activeTool !== 'scramble') {
+        if (noVisualizerMsg) noVisualizerMsg.classList.add('hidden');
+        return;
+    }
     if (isBlind) {
         scrambleDiagram.classList.add('hidden');
         if (noVisualizerMsg) {
             noVisualizerMsg.classList.remove('hidden');
-            noVisualizerMsg.innerText = 'No visualizer for blind events';
+            noVisualizerMsg.innerText = (currentLang === 'ko')
+                ? '블라인드 종목에서는 스크램블 이미지가 비활성화됩니다'
+                : 'Scramble images disabled for Blind';
         }
         return;
     }
@@ -1775,14 +1823,47 @@ window.saveSessionName = (id) => { const input = document.getElementById('editSe
 window.createNewSession = () => { const nameInput = document.getElementById('newSessionName'); const name = nameInput.value.trim() || `Session ${sessions[currentEvent].length + 1}`; if (sessions[currentEvent].length >= 10) return; sessions[currentEvent].forEach(s => s.isActive = false); sessions[currentEvent].push({ id: Date.now(), name: name, isActive: true }); nameInput.value = ""; renderSessionList(); updateUI(); saveData(); timerEl.innerText = (0).toFixed(precision); resetPenalty(); };
 window.switchSession = (id) => { sessions[currentEvent].forEach(s => s.isActive = (s.id === id)); renderSessionList(); updateUI(); saveData(); timerEl.innerText = (0).toFixed(precision); resetPenalty(); closeSessionModal(); };
 window.deleteSession = (id) => { const eventSessions = sessions[currentEvent]; if (!eventSessions || eventSessions.length <= 1) return; const targetIdx = eventSessions.findIndex(s => s.id === id); if (targetIdx === -1) return; const wasActive = eventSessions[targetIdx].isActive; sessions[currentEvent] = eventSessions.filter(s => s.id !== id); solves = solves.filter(s => !(s.event === currentEvent && s.sessionId === id)); if (wasActive && sessions[currentEvent].length > 0) sessions[currentEvent][0].isActive = true; renderSessionList(); updateUI(); saveData(); };
-window.openAvgShare = (type) => { const sid = getCurrentSessionId(); const count = (type === 'primary') ? (isAo5Mode ? 5 : 3) : 12; const filtered = solves.filter(s => s.event === currentEvent && s.sessionId === sid); if (filtered.length < count) return; const list = filtered.slice(0, count); const avgValue = calculateAvg(filtered, count, (type === 'primary' && !isAo5Mode)); const dateStr = list[0].date || new Date().toLocaleDateString(currentLang === 'ko' ? 'ko-KR' : 'en-US', { year: 'numeric', month: '2-digit', day: '2-digit' }).replace(/\.$/, ""); document.getElementById('shareDate').innerText = `Date : ${dateStr}.`; document.getElementById('shareLabel').innerText = (type === 'primary' && !isAo5Mode) ? `Mean of 3 :` : `Average of ${count} :`; document.getElementById('shareAvg').innerText = avgValue; const listContainer = document.getElementById('shareList'); listContainer.innerHTML = list.map((s, idx) => `<div class="flex flex-col p-3 bg-slate-50 dark:bg-slate-800 rounded-xl border border-slate-100 dark:border-slate-700"><div class="flex items-center gap-3"><span class="text-[10px] font-bold text-slate-400 w-4">${count - idx}.</span><span class="font-bold text-slate-800 dark:text-slate-200 text-sm min-w-[50px]">${s.penalty==='DNF'?'DNF':formatTime(s.penalty==='+2'?s.time+2000:s.time)}${s.penalty==='+2'?'+':''}</span><span class="text-[10px] text-slate-400 font-medium italic truncate flex-grow">${s.scramble}</span></div></div>`).reverse().join(''); document.getElementById('avgShareOverlay').classList.add('active'); };
+window.openAvgShare = (type) => {
+    const sid = getCurrentSessionId();
+    const count = (type === 'primary') ? (isAo5Mode ? 5 : 3) : 12;
+    const filtered = solves.filter(s => s.event === currentEvent && s.sessionId === sid);
+    if (filtered.length < count) return;
+    const list = filtered.slice(0, count);
+    const avgValue = calculateAvg(filtered, count, (type === 'primary' && !isAo5Mode));
+
+    const dateStr = list[0].date || new Date().toLocaleDateString(currentLang === 'ko' ? 'ko-KR' : 'en-US', { year: 'numeric', month: '2-digit', day: '2-digit' }).replace(/\.$/, "");
+    const datePrefix = currentLang === 'ko' ? '날짜 :' : 'Date :';
+    document.getElementById('shareDate').innerText = `${datePrefix} ${dateStr}.`;
+
+    const label = (type === 'primary' && !isAo5Mode)
+        ? (currentLang === 'ko' ? 'Mo3 :' : 'Mean of 3 :')
+        : (currentLang === 'ko' ? `Ao${count} :` : `Average of ${count} :`);
+    const overlay = document.getElementById('avgShareOverlay');
+    if (overlay) {
+        overlay.dataset.shareMode = 'avg';
+        overlay.dataset.shareCount = String(count);
+    }
+    document.getElementById('shareLabel').innerText = label;
+    document.getElementById('shareAvg').innerText = avgValue;
+
+    const listContainer = document.getElementById('shareList');
+    listContainer.innerHTML = list.map((s, idx) => `<div class="flex flex-col p-3 bg-slate-50 dark:bg-slate-800 rounded-xl border border-slate-100 dark:border-slate-700"><div class="flex items-center gap-3"><span class="text-[10px] font-bold text-slate-400 w-4">${count - idx}.</span><span class="font-bold text-slate-800 dark:text-slate-200 text-sm min-w-[50px]">${s.penalty==='DNF'?'DNF':formatTime(s.penalty==='+2'?s.time+2000:s.time)}${s.penalty==='+2'?'+':''}</span><span class="text-[10px] text-slate-400 font-medium italic truncate flex-grow">${s.scramble}</span></div></div>`).reverse().join('');
+
+    document.getElementById('avgShareOverlay').classList.add('active');
+};
 window.openSingleShare = () => {
     const s = solves.find(x => x.id === selectedSolveId);
     if (!s) return;
     closeModal();
     const dateStr = s.date || new Date().toLocaleDateString(currentLang === 'ko' ? 'ko-KR' : 'en-US', { year: 'numeric', month: '2-digit', day: '2-digit' }).replace(/\.$/, "");
-    document.getElementById('shareDate').innerText = `Date : ${dateStr}.`;
-    document.getElementById('shareLabel').innerText = `Single :`;
+    const datePrefix = currentLang === 'ko' ? '날짜 :' : 'Date :';
+    document.getElementById('shareDate').innerText = `${datePrefix} ${dateStr}.`;
+    document.getElementById('shareLabel').innerText = (currentLang === 'ko') ? '싱글 :' : 'Single :';
+    const overlay = document.getElementById('avgShareOverlay');
+    if (overlay) {
+        overlay.dataset.shareMode = 'single';
+        overlay.dataset.shareCount = '';
+    }
 
     const listContainer = document.getElementById('shareList');
     if (s.event === '333mbf' && s.mbf) {
@@ -1797,7 +1878,49 @@ window.openSingleShare = () => {
     document.getElementById('avgShareOverlay').classList.add('active');
 };
 window.closeAvgShare = () => document.getElementById('avgShareOverlay').classList.remove('active');
-window.copyShareText = () => { const date = document.getElementById('shareDate').innerText; const avgLabel = document.getElementById('shareLabel').innerText; const avgVal = document.getElementById('shareAvg').innerText; const isSingle = avgLabel.includes('Single'); let text = `[CubeTimer]\n\n${date}\n\n${avgLabel} ${avgVal}\n\n`; if (isSingle) { const s = solves.find(x => x.id === selectedSolveId); if (s) text += `1. ${avgVal}   ${s.scramble}\n`; } else { const count = avgLabel.includes('5') ? 5 : (avgLabel.includes('3') ? 3 : 12); const sid = getCurrentSessionId(); const filtered = solves.filter(s => s.event === currentEvent && s.sessionId === sid).slice(0, count); filtered.reverse().forEach((s, i) => { text += `${i+1}. ${s.penalty==='DNF'?'DNF':formatTime(s.penalty==='+2'?s.time+2000:s.time)}${s.penalty==='+2'?'+':''}   ${s.scramble}\n`; }); } const textArea = document.createElement("textarea"); textArea.value = text; document.body.appendChild(textArea); textArea.select(); try { document.execCommand('copy'); const btn = document.querySelector('[onclick="copyShareText()"]'); const original = btn.innerHTML; btn.innerHTML = "Copied!"; btn.classList.add('bg-green-600'); setTimeout(() => { btn.innerHTML = original; btn.classList.remove('bg-green-600'); }, 2000); } catch (err) { console.error('Copy failed', err); } document.body.removeChild(textArea); };
+window.copyShareText = () => {
+    const date = document.getElementById('shareDate').innerText;
+    const avgLabel = document.getElementById('shareLabel').innerText;
+    const avgVal = document.getElementById('shareAvg').innerText;
+    const overlay = document.getElementById('avgShareOverlay');
+    const mode = overlay?.dataset?.shareMode || '';
+    const count = parseInt(overlay?.dataset?.shareCount || '0', 10);
+
+    const isSingle = mode === 'single';
+    let text = `[CubeTimer]\n\n${date}\n\n${avgLabel} ${avgVal}\n\n`;
+
+    if (isSingle) {
+        const s = solves.find(x => x.id === selectedSolveId);
+        if (s) text += `1. ${avgVal}   ${s.scramble}\n`;
+    } else {
+        const n = (Number.isFinite(count) && count > 0) ? count : 12;
+        const sid = getCurrentSessionId();
+        const filtered = solves.filter(s => s.event === currentEvent && s.sessionId === sid).slice(0, n);
+        filtered.reverse().forEach((s, i) => {
+            text += `${i + 1}. ${s.penalty === 'DNF' ? 'DNF' : formatTime(s.penalty === '+2' ? s.time + 2000 : s.time)}${s.penalty === '+2' ? '+' : ''}   ${s.scramble}\n`;
+        });
+    }
+
+    const textArea = document.createElement("textarea");
+    textArea.value = text;
+    document.body.appendChild(textArea);
+    textArea.select();
+    try {
+        document.execCommand('copy');
+        const btn = document.querySelector('[onclick="copyShareText()"]');
+        const original = btn.innerHTML;
+        btn.innerHTML = (currentLang === 'ko') ? '복사됨!' : 'Copied!';
+        btn.classList.add('bg-green-600');
+        setTimeout(() => {
+            btn.innerHTML = original;
+            btn.classList.remove('bg-green-600');
+            try { applyAutoI18n(document); } catch (_) {}
+        }, 2000);
+    } catch (err) {
+        console.error('Copy failed', err);
+    }
+    document.body.removeChild(textArea);
+};
 window.addEventListener('keydown', e => { if(editingSessionId || document.activeElement.tagName === 'INPUT') { if(e.code === 'Enter' && document.activeElement === manualInput) {} else { return; } } if(e.code==='Space' && !e.repeat) { e.preventDefault(); handleStart(e); } if(isManualMode && e.code==='Enter') { let v = parseFloat(manualInput.value); if(v>0) { solves.unshift({ id:Date.now(), time:v*1000, scramble:currentScramble, event:currentEvent, sessionId: getCurrentSessionId(), penalty:null, date: new Date().toLocaleDateString(currentLang === 'ko' ? 'ko-KR' : 'en-US', { year: 'numeric', month: '2-digit', day: '2-digit' }).replace(/\.$/, "") }); manualInput.value=""; updateUI(); generateScramble(); saveData(); } } });
 window.addEventListener('keyup', e => { if(e.code==='Space' && !editingSessionId) handleEnd(e); });
 const interactiveArea = document.getElementById('timerInteractiveArea');
