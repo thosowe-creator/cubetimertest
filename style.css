@@ -7,12 +7,17 @@ body {
 }
 
 .timer-display {
-  font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  /* Match the averages font for consistency */
+  font-family: inherit;
+  font-variant-numeric: tabular-nums;
   font-size: clamp(4.8rem, 18vw, 11.5rem);
   font-weight: 500; /* thinner than 700 */
   line-height: 1;
   transition: color 0.1s;
 }
+
+/* Hide the Ready/Hint pill entirely (keep timing logic intact) */
+#statusHint { display: none !important; }
 
 .manual-input {
   font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
