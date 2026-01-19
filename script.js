@@ -318,10 +318,9 @@ const RELEASE_NOTES = [
     items: {
       ko: [
         '모든 종목의 스크램블 이미지 표기',
-        '모든 종목의 스크램블 로직 개선',
+        '모든 종목의 스크램블 로직 고도화',
         '타이머 오차가 있던 현상 수정',
         '멀티블라인드 스코어 입력 기능 추가',
-        '종목 선택 탭 개선',
         '영어 및 한국어 지원',
       ],
       en: [
@@ -329,7 +328,6 @@ const RELEASE_NOTES = [
         'Improved scramble logic for all events',
         'Fixed timer accuracy issue',
         'Added multi-blind score input',
-        'Event selection tab improvements',
         'Korean & English language support',
       ]
     }
@@ -804,6 +802,8 @@ function startTimer() {
     // High-precision timer loop (prevents interval drift)
     startPerf = performance.now();
     isRunning = true;
+    // Prevent accidental page scroll while timing on mobile
+    document.body.classList.add('no-scroll');
     setControlsLocked(true);
     if (timerRafId) cancelAnimationFrame(timerRafId);
     const tick = () => {
@@ -826,6 +826,9 @@ function stopTimer(forcedTime = null) {
     clearInterval(timerInterval); // legacy safety (in case any older interval was running)
     const elapsed = forcedTime !== null ? forcedTime : (performance.now() - startPerf);
     lastStopTimestamp = Date.now();
+
+    // Stop timing: restore scroll
+    document.body.classList.remove('no-scroll');
 
     // Multi-Blind: WCA식 입력 모달에서 결과를 완성해야 저장
     if (currentEvent === '333mbf') {
