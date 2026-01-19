@@ -27,10 +27,28 @@ let inspectionPenalty = null; // null, '+2', 'DNF'
 let hasSpoken8 = false;
 let hasSpoken12 = false;
 let lastStopTimestamp = 0;
-// Update Log Configuration
-const APP_VERSION = '1.1.1'; 
-const UPDATE_LOGS = [
-    "스페이스바를 통한 측정 불가 현상 수정",
+// Release Notes / Known Issues (Settings에서 언제든 확인 가능)
+const APP_VERSION = '1.1.2';
+const RELEASE_NOTES = [
+    {
+        version: '1.1.2',
+        date: '2026-01-19',
+        items: [
+            '종목 변경/스크램블 로딩 중 Loading UI 추가 + 레이스 컨디션(겹침/늦게 덮어쓰기) 방지',
+            'Multi-BLD(333mbf) WCA식 결과 입력/저장/표시 추가',
+            'Update Log / Known Issues를 Settings에서 확인 가능하도록 개선',
+        ]
+    },
+    {
+        version: '1.1.1',
+        date: '2026-01-??',
+        items: [
+            '스페이스바를 통한 측정 불가 현상 수정',
+        ]
+    }
+];
+const KNOWN_ISSUES = [
+    // 필요시 운영 중 추가
 ];
 // Lazy Loading Vars
 let displayedSolvesCount = 50;
@@ -39,6 +57,11 @@ let btDevice = null;
 let btCharacteristic = null;
 let isBtConnected = false;
 let lastBtState = null;
+// Scramble race-condition guard
+let scrambleReqId = 0;
+let lastScrambleTrigger = null; // retry 용
+// MBF pending solve
+let pendingMbfDraft = null;
 const timerEl = document.getElementById('timer');
 const scrambleEl = document.getElementById('scramble');
 const mbfInputArea = document.getElementById('mbfInputArea');
@@ -66,6 +89,11 @@ const holdDurationValue = document.getElementById('holdDurationValue');
 const inspectionToggle = document.getElementById('inspectionToggle');
 const scrambleDiagram = document.getElementById('scrambleDiagram');
 const eventSelect = document.getElementById('eventSelect');
+// Scramble Loading UI Elements (optional: null guard)
+const scrambleLoadingRow = document.getElementById('scrambleLoadingRow');
+const scrambleLoadingText = document.getElementById('scrambleLoadingText');
+const scrambleDiagramSkeleton = document.getElementById('scrambleDiagramSkeleton');
+const scrambleRetryBtn = document.getElementById('scrambleRetryBtn');
 // UI Sections for Mobile Tab Switching
 const timerSection = document.getElementById('timerSection');
 const historySection = document.getElementById('historySection');
@@ -139,19 +167,58 @@ window.addEventListener('resize', () => {
         }
     }
 });
-// --- Update Log Logic ---
+// --- Update Log / Known Issues ---
+function renderUpdateLog(latestOnly = true) {
+    const overlay = document.getElementById('updateLogOverlay');
+    const versionEl = document.getElementById('updateVersion');
+    const listEl = document.getElementById('updateList');
+    if (!overlay || !versionEl || !listEl) return;
+    const notes = latestOnly ? RELEASE_NOTES.slice(0, 1) : RELEASE_NOTES;
+    const latest = RELEASE_NOTES[0];
+    versionEl.innerText = latest ? `v${latest.version}` : `v${APP_VERSION}`;
+    listEl.innerHTML = notes.map((r, idx) => {
+        const header = latestOnly ? '' : `<li class="list-none -ml-4 mb-1"><span class="text-[11px] font-black text-slate-500 dark:text-slate-400">v${r.version} · ${r.date}</span></li>`;
+        const items = (r.items || []).map(it => `<li>${it}</li>`).join('');
+        return `${header}${items}${idx < notes.length - 1 ? '<li class="list-none -ml-4 my-3 border-t border-slate-100 dark:border-slate-800"></li>' : ''}`;
+    }).join('');
+}
+window.openUpdateLog = (auto = false) => {
+    if (isRunning) return;
+    renderUpdateLog(!auto ? false : true);
+    const overlay = document.getElementById('updateLogOverlay');
+    if (overlay) overlay.classList.add('active');
+}
 function checkUpdateLog() {
     const savedVersion = localStorage.getItem('appVersion');
     if (savedVersion !== APP_VERSION) {
-        document.getElementById('updateVersion').innerText = `v${APP_VERSION}`;
-        const list = document.getElementById('updateList');
-        list.innerHTML = UPDATE_LOGS.map(log => `<li>${log}</li>`).join('');
-        document.getElementById('updateLogOverlay').classList.add('active');
+        renderUpdateLog(true);
+        const overlay = document.getElementById('updateLogOverlay');
+        if (overlay) overlay.classList.add('active');
     }
 }
 window.closeUpdateLog = () => {
-    document.getElementById('updateLogOverlay').classList.remove('active');
+    const overlay = document.getElementById('updateLogOverlay');
+    if (overlay) overlay.classList.remove('active');
     localStorage.setItem('appVersion', APP_VERSION);
+};
+window.openKnownIssues = () => {
+    if (isRunning) return;
+    const overlay = document.getElementById('knownIssuesOverlay');
+    const listEl = document.getElementById('knownIssuesList');
+    if (!overlay || !listEl) return;
+    if (!KNOWN_ISSUES.length) {
+        listEl.innerHTML = `<li class="p-3 bg-slate-50 dark:bg-slate-800 rounded-xl border border-slate-100 dark:border-slate-700 text-xs font-bold text-slate-400">No known issues currently.</li>`;
+    } else {
+        listEl.innerHTML = KNOWN_ISSUES.map(ki => {
+            const status = ki.status ? String(ki.status) : 'open';
+            return `<li class="p-3 bg-slate-50 dark:bg-slate-800 rounded-xl border border-slate-100 dark:border-slate-700"><div class="flex items-center justify-between"><span class="text-[11px] font-black text-slate-700 dark:text-slate-200">${ki.title || ki.id || 'Issue'}</span><span class="text-[10px] font-black text-slate-400 uppercase">${status}</span></div><div class="mt-1 text-[10px] font-bold text-slate-400">Since: ${ki.since || '-'}</div></li>`;
+        }).join('');
+    }
+    overlay.classList.add('active');
+}
+window.closeKnownIssues = () => {
+    const overlay = document.getElementById('knownIssuesOverlay');
+    if (overlay) overlay.classList.remove('active');
 };
 // --- Inspection Logic ---
 function toggleInspection(checkbox) {
@@ -394,12 +461,21 @@ function onBTDisconnected() {
     document.getElementById('btStatusText').innerText = "Timer Disconnected";
     statusHint.innerText = "Hold to Ready";
 }
+function setControlsLocked(locked) {
+    // RUNNING 중 실수 방지 (모바일 한 손 사용 가이드)
+    const disabled = !!locked;
+    if (eventSelect) eventSelect.disabled = disabled;
+    if (plus2Btn) plus2Btn.disabled = disabled;
+    if (dnfBtn) dnfBtn.disabled = disabled;
+}
+
 function startTimer() {
     if(inspectionInterval) clearInterval(inspectionInterval);
     inspectionState = 'none';
     // High-precision timer loop (prevents interval drift)
     startPerf = performance.now();
     isRunning = true;
+    setControlsLocked(true);
     if (timerRafId) cancelAnimationFrame(timerRafId);
     const tick = () => {
         if (!isRunning) return;
@@ -421,6 +497,19 @@ function stopTimer(forcedTime = null) {
     clearInterval(timerInterval); // legacy safety (in case any older interval was running)
     const elapsed = forcedTime !== null ? forcedTime : (performance.now() - startPerf);
     lastStopTimestamp = Date.now();
+
+    // Multi-Blind: WCA식 입력 모달에서 결과를 완성해야 저장
+    if (currentEvent === '333mbf') {
+        isRunning = isReady = false;
+        inspectionState = 'none';
+        inspectionPenalty = null;
+        setControlsLocked(false);
+        timerEl.innerText = formatTime(elapsed);
+        statusHint.innerText = "Enter MBF Result";
+        openMbfResultModal({ defaultTimeMs: elapsed });
+        saveData();
+        return;
+    }
     let finalPenalty = inspectionPenalty;
     if (elapsed > 10 || finalPenalty === 'DNF') {
         solves.unshift({
@@ -445,11 +534,13 @@ function stopTimer(forcedTime = null) {
     isRunning = isReady = false;
     inspectionState = 'none';
     inspectionPenalty = null;
+    setControlsLocked(false);
     updateUI();
     generateScramble();
     statusHint.innerText = isBtConnected ? "Ready (Bluetooth)" : (isInspectionMode ? "Start Inspection" : "Hold to Ready");
     timerEl.classList.remove('text-running', 'text-ready');
     timerEl.style.color = '';
+    setControlsLocked(false);
     saveData();
 }
 // --- Penalty Functions ---
@@ -774,13 +865,56 @@ function changeEvent(e) {
     if (currentEvent === '333mbf') {
         scrambleEl.classList.add('hidden');
         mbfInputArea.classList.remove('hidden');
+        setScrambleLoadingState(false);
     } else {
         scrambleEl.classList.remove('hidden');
         mbfInputArea.classList.add('hidden');
+        setScrambleLoadingState(true, 'Loading scramble…');
+        clearScrambleDiagram();
         generateScramble(); 
     }
     
     updateUI(); timerEl.innerText = (0).toFixed(precision); saveData();
+}
+
+function clearScrambleDiagram() {
+    // 이전 다이어그램/텍스트가 잠깐 보이는 문제 방지
+    if (scrambleDiagram) {
+        scrambleDiagram.classList.add('hidden');
+        scrambleDiagram.removeAttribute('scramble');
+    }
+}
+
+function setScrambleLoadingState(isLoading, message = 'Loading scramble…', showRetry = false) {
+    // null guard: 일부 레이아웃/버전에서 요소가 없을 수 있음
+    if (scrambleRetryBtn) {
+        scrambleRetryBtn.classList.toggle('hidden', !showRetry);
+    }
+    if (scrambleLoadingRow) {
+        scrambleLoadingRow.classList.toggle('hidden', !isLoading);
+        scrambleLoadingRow.classList.toggle('flex', isLoading);
+    }
+    if (scrambleLoadingText) {
+        scrambleLoadingText.innerText = message || 'Loading scramble…';
+    }
+    if (scrambleDiagramSkeleton) {
+        scrambleDiagramSkeleton.classList.toggle('hidden', !isLoading);
+    }
+    if (isLoading) {
+        // 종목 변경/재생성 시 이전 내용 즉시 숨김
+        if (scrambleEl) scrambleEl.innerText = '';
+        clearScrambleDiagram();
+    }
+}
+
+window.retryScramble = () => {
+    if (isRunning) return;
+    setScrambleLoadingState(true, 'Retrying…');
+    if (typeof lastScrambleTrigger === 'function') {
+        lastScrambleTrigger();
+    } else {
+        generateScramble();
+    }
 }
 async function generate3bldScrambleText() {
     const conf = configs['333bf'];
@@ -810,18 +944,24 @@ async function generate3bldScrambleText() {
 async function generateScramble() {
     const conf = configs[currentEvent];
     if (!conf || currentEvent === '333mbf') return;
+    lastScrambleTrigger = () => generateScramble();
+    const reqId = ++scrambleReqId;
+    setScrambleLoadingState(true, 'Loading scramble…', false);
     // Prefer cubing.js (official random-state scrambles) when available.
     const cubingFn = window.__randomScrambleForEvent;
     if (typeof cubingFn === 'function') {
         try {
             const alg = await cubingFn(mapEventIdForCubing(currentEvent));
+            if (reqId !== scrambleReqId) return; // stale
             currentScramble = alg.toString();
-            scrambleEl.innerText = currentScramble;
+            if (scrambleEl) scrambleEl.innerText = currentScramble;
+            setScrambleLoadingState(false);
             updateScrambleDiagram();
             resetPenalty();
             if (activeTool === 'graph') renderHistoryGraph();
             return;
         } catch (err) {
+            if (reqId !== scrambleReqId) return;
             console.warn('[CubeTimer] cubing.js scramble failed. Falling back to internal generator.', err);
         }
     }
@@ -947,7 +1087,9 @@ async function generateScramble() {
         }
         currentScramble = res.join(" ");
     }
-    scrambleEl.innerText = currentScramble;
+    if (reqId !== scrambleReqId) return; // stale
+    if (scrambleEl) scrambleEl.innerText = currentScramble;
+    setScrambleLoadingState(false);
     updateScrambleDiagram();
     resetPenalty();
     if (activeTool === 'graph') renderHistoryGraph();
@@ -1000,6 +1142,116 @@ window.copyMbfText = () => {
     const btn = document.querySelector('[onclick="copyMbfText()"]');
     const original = btn.innerText; btn.innerText = "Copied!"; setTimeout(() => btn.innerText = original, 2000);
 };
+
+function formatClockTime(ms) {
+    if (ms == null || isNaN(ms)) return '-';
+    const totalSec = Math.round(ms / 1000);
+    const sec = totalSec % 60;
+    const totalMin = Math.floor(totalSec / 60);
+    const min = totalMin % 60;
+    const hr = Math.floor(totalMin / 60);
+    const pad = (n) => String(n).padStart(2, '0');
+    if (hr > 0) return `${hr}:${pad(min)}:${pad(sec)}`;
+    return `${min}:${pad(sec)}`;
+}
+
+function parseClockTimeToMs(str) {
+    // Accept: ss, mm:ss, hh:mm:ss
+    const s = String(str || '').trim();
+    if (!s) return null;
+    if (/^\d+(\.\d+)?$/.test(s)) {
+        // seconds (allow decimal)
+        return Math.round(parseFloat(s) * 1000);
+    }
+    const parts = s.split(':').map(p => p.trim()).filter(Boolean);
+    if (parts.length < 2 || parts.length > 3) return null;
+    const nums = parts.map(p => ( /^\d+(\.\d+)?$/.test(p) ? parseFloat(p) : NaN));
+    if (nums.some(n => isNaN(n))) return null;
+    let hr = 0, min = 0, sec = 0;
+    if (nums.length === 2) {
+        [min, sec] = nums;
+    } else {
+        [hr, min, sec] = nums;
+    }
+    if (sec < 0 || sec >= 60 || min < 0 || min >= 60 || hr < 0) return null;
+    return Math.round(((hr * 3600) + (min * 60) + sec) * 1000);
+}
+
+window.openMbfResultModal = ({ defaultTimeMs } = {}) => {
+    const overlay = document.getElementById('mbfResultOverlay');
+    if (!overlay) return;
+    const attemptedEl = document.getElementById('mbfAttemptedInput');
+    const solvedEl = document.getElementById('mbfSolvedInput');
+    const timeEl = document.getElementById('mbfTimeInput');
+    const errEl = document.getElementById('mbfResultError');
+    if (errEl) { errEl.classList.add('hidden'); errEl.innerText = ''; }
+
+    // Draft 생성 (Save 버튼을 누를 때 실제 solve로 저장)
+    pendingMbfDraft = {
+        id: Date.now(),
+        event: '333mbf',
+        sessionId: getCurrentSessionId(),
+        date: new Date().toLocaleDateString('ko-KR', { year: 'numeric', month: '2-digit', day: '2-digit' }).replace(/\.$/, ""),
+        scramble: currentScramble || 'Multi-Blind',
+        time: (defaultTimeMs != null ? defaultTimeMs : null),
+        penalty: null,
+        mbf: {
+            attempted: null,
+            solved: null,
+            timeMs: (defaultTimeMs != null ? defaultTimeMs : null),
+            resultText: ''
+        }
+    };
+
+    // 기본값: mbfCubeInput이 있으면 attempted에 반영
+    const defaultAttempted = parseInt(mbfCubeInput?.value);
+    if (attemptedEl) attemptedEl.value = Number.isFinite(defaultAttempted) ? String(defaultAttempted) : '';
+    if (solvedEl) solvedEl.value = '';
+    if (timeEl) timeEl.value = defaultTimeMs != null ? formatClockTime(defaultTimeMs) : '';
+
+    overlay.classList.add('active');
+    // focus (모바일)
+    setTimeout(() => { attemptedEl?.focus?.(); }, 50);
+}
+window.closeMbfResultModal = () => {
+    const overlay = document.getElementById('mbfResultOverlay');
+    if (overlay) overlay.classList.remove('active');
+    pendingMbfDraft = null;
+    statusHint.innerText = isBtConnected ? "Ready (Bluetooth)" : (isInspectionMode ? "Start Inspection" : "Hold to Ready");
+}
+window.saveMbfResult = () => {
+    const errEl = document.getElementById('mbfResultError');
+    const attemptedEl = document.getElementById('mbfAttemptedInput');
+    const solvedEl = document.getElementById('mbfSolvedInput');
+    const timeEl = document.getElementById('mbfTimeInput');
+    const attempted = parseInt(attemptedEl?.value);
+    const solved = parseInt(solvedEl?.value);
+    const timeMs = parseClockTimeToMs(timeEl?.value);
+
+    const fail = (msg) => {
+        if (!errEl) return;
+        errEl.innerText = msg;
+        errEl.classList.remove('hidden');
+    };
+    if (!pendingMbfDraft) return fail('저장할 MBF 기록이 없습니다.');
+    if (!Number.isFinite(attempted) || attempted < 1) return fail('Attempted는 1 이상이어야 합니다.');
+    if (!Number.isFinite(solved) || solved < 0) return fail('Solved는 0 이상이어야 합니다.');
+    if (solved > attempted) return fail('Solved는 Attempted를 초과할 수 없습니다.');
+    if (timeMs == null) return fail('Time 형식이 올바르지 않습니다. 예) 12:34 또는 1:02:03');
+
+    pendingMbfDraft.mbf.attempted = attempted;
+    pendingMbfDraft.mbf.solved = solved;
+    pendingMbfDraft.mbf.timeMs = timeMs;
+    pendingMbfDraft.mbf.resultText = `${solved}/${attempted} ${formatClockTime(timeMs)}`;
+    // 대표 time 필드는 mbf.timeMs로 통일
+    pendingMbfDraft.time = timeMs;
+
+    solves.unshift(pendingMbfDraft);
+    pendingMbfDraft = null;
+    closeMbfResultModal();
+    updateUI();
+    saveData();
+}
 // [UPDATED] Format Time to support Minutes:Seconds format
 function formatTime(ms) { 
     const minutes = Math.floor(ms / 60000);
@@ -1030,15 +1282,32 @@ function updateUI() {
     // Lazy Render Logic
     const subset = filtered.slice(0, displayedSolvesCount);
     
+    const solvePrimaryText = (s) => {
+        if (s.event === '333mbf' && s.mbf) {
+            return s.mbf.resultText || `${s.mbf.solved}/${s.mbf.attempted} ${formatClockTime(s.mbf.timeMs || s.time)}`;
+        }
+        const base = (s.penalty === 'DNF') ? 'DNF' : formatTime(s.penalty === '+2' ? s.time + 2000 : s.time);
+        return `${base}${s.penalty === '+2' ? '+' : ''}`;
+    }
+
     historyList.innerHTML = subset.map(s => `
         <div class="bg-slate-50 dark:bg-slate-800 border border-slate-100 dark:border-slate-700 p-3 rounded-xl flex justify-between items-center group cursor-pointer hover:bg-white dark:hover:bg-slate-700 hover:shadow-sm transition-all" onclick="showSolveDetails(${s.id})">
-            <span class="font-bold text-slate-700 dark:text-slate-200 text-sm">${s.penalty==='DNF'?'DNF':formatTime(s.penalty==='+2'?s.time+2000:s.time)}${s.penalty==='+2'?'+':''}</span>
+            <span class="font-bold text-slate-700 dark:text-slate-200 text-sm">${solvePrimaryText(s)}</span>
             <button onclick="event.stopPropagation(); deleteSolve(${s.id})" class="opacity-0 group-hover:opacity-100 text-slate-300 hover:text-red-400">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 6 6 18M6 6l12 12"/></svg>
             </button>
         </div>
     `).join('') || '<div class="text-center py-10 text-slate-300 text-[11px] italic">No solves yet</div>';
     solveCountEl.innerText = filtered.length;
+    if (currentEvent === '333mbf') {
+        labelPrimaryAvg.innerText = "-";
+        displayPrimaryAvg.innerText = "-";
+        displayAo12.innerText = "-";
+        sessionAvgEl.innerText = "-";
+        bestSolveEl.innerText = "-";
+        if (activeTool === 'graph') renderHistoryGraph();
+        return;
+    }
     if (isAo5Mode) { labelPrimaryAvg.innerText = "Ao5"; displayPrimaryAvg.innerText = calculateAvg(filtered, 5); } 
     else { labelPrimaryAvg.innerText = "Mo3"; displayPrimaryAvg.innerText = calculateAvg(filtered, 3, true); }
     displayAo12.innerText = calculateAvg(filtered, 12);
@@ -1204,7 +1473,26 @@ window.createNewSession = () => { const nameInput = document.getElementById('new
 window.switchSession = (id) => { sessions[currentEvent].forEach(s => s.isActive = (s.id === id)); renderSessionList(); updateUI(); saveData(); timerEl.innerText = (0).toFixed(precision); resetPenalty(); closeSessionModal(); };
 window.deleteSession = (id) => { const eventSessions = sessions[currentEvent]; if (!eventSessions || eventSessions.length <= 1) return; const targetIdx = eventSessions.findIndex(s => s.id === id); if (targetIdx === -1) return; const wasActive = eventSessions[targetIdx].isActive; sessions[currentEvent] = eventSessions.filter(s => s.id !== id); solves = solves.filter(s => !(s.event === currentEvent && s.sessionId === id)); if (wasActive && sessions[currentEvent].length > 0) sessions[currentEvent][0].isActive = true; renderSessionList(); updateUI(); saveData(); };
 window.openAvgShare = (type) => { const sid = getCurrentSessionId(); const count = (type === 'primary') ? (isAo5Mode ? 5 : 3) : 12; const filtered = solves.filter(s => s.event === currentEvent && s.sessionId === sid); if (filtered.length < count) return; const list = filtered.slice(0, count); const avgValue = calculateAvg(filtered, count, (type === 'primary' && !isAo5Mode)); const dateStr = list[0].date || new Date().toLocaleDateString('ko-KR', { year: 'numeric', month: '2-digit', day: '2-digit' }).replace(/\.$/, ""); document.getElementById('shareDate').innerText = `Date : ${dateStr}.`; document.getElementById('shareLabel').innerText = (type === 'primary' && !isAo5Mode) ? `Mean of 3 :` : `Average of ${count} :`; document.getElementById('shareAvg').innerText = avgValue; const listContainer = document.getElementById('shareList'); listContainer.innerHTML = list.map((s, idx) => `<div class="flex flex-col p-3 bg-slate-50 dark:bg-slate-800 rounded-xl border border-slate-100 dark:border-slate-700"><div class="flex items-center gap-3"><span class="text-[10px] font-bold text-slate-400 w-4">${count - idx}.</span><span class="font-bold text-slate-800 dark:text-slate-200 text-sm min-w-[50px]">${s.penalty==='DNF'?'DNF':formatTime(s.penalty==='+2'?s.time+2000:s.time)}${s.penalty==='+2'?'+':''}</span><span class="text-[10px] text-slate-400 font-medium italic truncate flex-grow">${s.scramble}</span></div></div>`).reverse().join(''); document.getElementById('avgShareOverlay').classList.add('active'); };
-window.openSingleShare = () => { const s = solves.find(x => x.id === selectedSolveId); if (!s) return; closeModal(); const dateStr = s.date || new Date().toLocaleDateString('ko-KR', { year: 'numeric', month: '2-digit', day: '2-digit' }).replace(/\.$/, ""); document.getElementById('shareDate').innerText = `Date : ${dateStr}.`; document.getElementById('shareLabel').innerText = `Single :`; document.getElementById('shareAvg').innerText = s.penalty==='DNF'?'DNF':formatTime(s.penalty==='+2'?s.time+2000:s.time) + (s.penalty==='+2'?'+':''); const listContainer = document.getElementById('shareList'); listContainer.innerHTML = `<div class="flex flex-col p-3 bg-slate-50 dark:bg-slate-800 rounded-xl border border-slate-100 dark:border-slate-700"><div class="flex items-center gap-3"><span class="text-[10px] font-bold text-slate-400 w-4">1.</span><span class="font-bold text-slate-800 dark:text-slate-200 text-sm min-w-[50px]">${s.penalty==='DNF'?'DNF':formatTime(s.penalty==='+2'?s.time+2000:s.time)}${s.penalty==='+2'?'+':''}</span><span class="text-[10px] text-slate-400 font-medium italic truncate flex-grow">${s.scramble}</span></div></div>`; document.getElementById('avgShareOverlay').classList.add('active'); };
+window.openSingleShare = () => {
+    const s = solves.find(x => x.id === selectedSolveId);
+    if (!s) return;
+    closeModal();
+    const dateStr = s.date || new Date().toLocaleDateString('ko-KR', { year: 'numeric', month: '2-digit', day: '2-digit' }).replace(/\.$/, "");
+    document.getElementById('shareDate').innerText = `Date : ${dateStr}.`;
+    document.getElementById('shareLabel').innerText = `Single :`;
+
+    const listContainer = document.getElementById('shareList');
+    if (s.event === '333mbf' && s.mbf) {
+        const res = s.mbf.resultText || `${s.mbf.solved}/${s.mbf.attempted} ${formatClockTime(s.mbf.timeMs || s.time)}`;
+        document.getElementById('shareAvg').innerText = res;
+        listContainer.innerHTML = `<div class="flex flex-col p-3 bg-slate-50 dark:bg-slate-800 rounded-xl border border-slate-100 dark:border-slate-700"><div class="flex items-center gap-3"><span class="text-[10px] font-bold text-slate-400 w-4">1.</span><span class="font-bold text-slate-800 dark:text-slate-200 text-sm min-w-[50px]">${res}</span><span class="text-[10px] text-slate-400 font-medium italic truncate flex-grow">${(s.scramble || '').toString()}</span></div></div>`;
+    } else {
+        const res = (s.penalty==='DNF') ? 'DNF' : (formatTime(s.penalty==='+2'?s.time+2000:s.time) + (s.penalty==='+2'?'+':''));
+        document.getElementById('shareAvg').innerText = res;
+        listContainer.innerHTML = `<div class="flex flex-col p-3 bg-slate-50 dark:bg-slate-800 rounded-xl border border-slate-100 dark:border-slate-700"><div class="flex items-center gap-3"><span class="text-[10px] font-bold text-slate-400 w-4">1.</span><span class="font-bold text-slate-800 dark:text-slate-200 text-sm min-w-[50px]">${s.penalty==='DNF'?'DNF':formatTime(s.penalty==='+2'?s.time+2000:s.time)}${s.penalty==='+2'?'+':''}</span><span class="text-[10px] text-slate-400 font-medium italic truncate flex-grow">${s.scramble}</span></div></div>`;
+    }
+    document.getElementById('avgShareOverlay').classList.add('active');
+};
 window.closeAvgShare = () => document.getElementById('avgShareOverlay').classList.remove('active');
 window.copyShareText = () => { const date = document.getElementById('shareDate').innerText; const avgLabel = document.getElementById('shareLabel').innerText; const avgVal = document.getElementById('shareAvg').innerText; const isSingle = avgLabel.includes('Single'); let text = `[CubeTimer]\n\n${date}\n\n${avgLabel} ${avgVal}\n\n`; if (isSingle) { const s = solves.find(x => x.id === selectedSolveId); if (s) text += `1. ${avgVal}   ${s.scramble}\n`; } else { const count = avgLabel.includes('5') ? 5 : (avgLabel.includes('3') ? 3 : 12); const sid = getCurrentSessionId(); const filtered = solves.filter(s => s.event === currentEvent && s.sessionId === sid).slice(0, count); filtered.reverse().forEach((s, i) => { text += `${i+1}. ${s.penalty==='DNF'?'DNF':formatTime(s.penalty==='+2'?s.time+2000:s.time)}${s.penalty==='+2'?'+':''}   ${s.scramble}\n`; }); } const textArea = document.createElement("textarea"); textArea.value = text; document.body.appendChild(textArea); textArea.select(); try { document.execCommand('copy'); const btn = document.querySelector('[onclick="copyShareText()"]'); const original = btn.innerHTML; btn.innerHTML = "Copied!"; btn.classList.add('bg-green-600'); setTimeout(() => { btn.innerHTML = original; btn.classList.remove('bg-green-600'); }, 2000); } catch (err) { console.error('Copy failed', err); } document.body.removeChild(textArea); };
 window.addEventListener('keydown', e => { if(editingSessionId || document.activeElement.tagName === 'INPUT') { if(e.code === 'Enter' && document.activeElement === manualInput) {} else { return; } } if(e.code==='Space' && !e.repeat) { e.preventDefault(); handleStart(e); } if(isManualMode && e.code==='Enter') { let v = parseFloat(manualInput.value); if(v>0) { solves.unshift({ id:Date.now(), time:v*1000, scramble:currentScramble, event:currentEvent, sessionId: getCurrentSessionId(), penalty:null, date: new Date().toLocaleDateString('ko-KR', { year: 'numeric', month: '2-digit', day: '2-digit' }).replace(/\.$/, "") }); manualInput.value=""; updateUI(); generateScramble(); saveData(); } } });
@@ -1214,6 +1502,7 @@ interactiveArea.addEventListener('touchstart', handleStart, { passive: false });
 interactiveArea.addEventListener('touchend', handleEnd, { passive: false });
 // [UPDATED] Toggle Settings: Acts as open/close toggle
 window.openSettings = () => { 
+    if (isRunning) return;
     const overlay = document.getElementById('settingsOverlay');
     if (overlay.classList.contains('active')) {
         closeSettings();
@@ -1224,7 +1513,31 @@ window.openSettings = () => {
 };
 window.closeSettings = () => { document.getElementById('settingsModal').classList.add('scale-95','opacity-0'); setTimeout(()=>document.getElementById('settingsOverlay').classList.remove('active'), 200); saveData(); };
 window.handleOutsideSettingsClick = (e) => { if(e.target === document.getElementById('settingsOverlay')) closeSettings(); };
-window.showSolveDetails = (id) => { let s = solves.find(x=>x.id===id); if(!s) return; selectedSolveId = id; document.getElementById('modalTime').innerText = s.penalty==='DNF'?'DNF':formatTime(s.penalty==='+2'?s.time+2000:s.time); document.getElementById('modalEvent').innerText = s.event; document.getElementById('modalScramble').innerText = s.scramble; document.getElementById('modalOverlay').classList.add('active'); };
+window.showSolveDetails = (id) => {
+    const s = solves.find(x => x.id === id);
+    if (!s) return;
+    selectedSolveId = id;
+    const timeEl = document.getElementById('modalTime');
+    const eventEl = document.getElementById('modalEvent');
+    const scrEl = document.getElementById('modalScramble');
+    const overlay = document.getElementById('modalOverlay');
+    const useBtn = document.querySelector('[onclick="useThisScramble()"]');
+
+    if (s.event === '333mbf' && s.mbf) {
+        if (timeEl) timeEl.innerText = s.mbf.resultText || `${s.mbf.solved}/${s.mbf.attempted} ${formatClockTime(s.mbf.timeMs || s.time)}`;
+        if (eventEl) eventEl.innerText = '333mbf';
+        if (scrEl) scrEl.innerText = (s.scramble || '').toString();
+        if (useBtn) useBtn.classList.add('hidden');
+    } else {
+        const base = (s.penalty === 'DNF') ? 'DNF' : formatTime(s.penalty === '+2' ? s.time + 2000 : s.time);
+        if (timeEl) timeEl.innerText = `${base}${s.penalty === '+2' ? '+' : ''}`;
+        if (eventEl) eventEl.innerText = s.event;
+        if (scrEl) scrEl.innerText = s.scramble;
+        if (useBtn) useBtn.classList.remove('hidden');
+    }
+
+    if (overlay) overlay.classList.add('active');
+};
 window.closeModal = () => document.getElementById('modalOverlay').classList.remove('active');
 window.useThisScramble = () => { let s=solves.find(x=>x.id===selectedSolveId); if(s){currentScramble=s.scramble; scrambleEl.innerText=currentScramble; closeModal();} };
 precisionToggle.onchange = e => { precision = e.target.checked?3:2; updateUI(); timerEl.innerText=(0).toFixed(precision); saveData(); };
