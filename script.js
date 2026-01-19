@@ -152,25 +152,86 @@ const AUTO_I18N_LOOKUP = (() => {
 })();
 
 function applyAutoI18n(root = document) {
-  if (!root || !root.querySelectorAll) return;
+  // NOTE:
+  // 기존 버전은 "자식 엘리먼트가 없는 요소"만 번역해서,
+  // 아이콘(svg) + 텍스트 구조의 버튼/탭 라벨이 거의 번역되지 않았습니다.
+  // -> 텍스트 노드(TreeWalker) 단위로 정확히 치환하도록 변경.
+  if (!root) return;
   const targetLang = currentLang === 'ko' ? 'ko' : 'en';
 
   // Translate placeholders (inputs / textareas)
-  for (const el of root.querySelectorAll('input[placeholder], textarea[placeholder]')) {
-    const ph = (el.getAttribute('placeholder') || '').trim();
-    const pair = AUTO_I18N_LOOKUP.get(ph);
-    if (pair) el.setAttribute('placeholder', pair[targetLang]);
-  }
+  try {
+    const scope = root.querySelectorAll ? root : document;
+    for (const el of scope.querySelectorAll('input[placeholder], textarea[placeholder]')) {
+      const ph = (el.getAttribute('placeholder') || '').trim();
+      const pair = AUTO_I18N_LOOKUP.get(ph);
+      if (pair) el.setAttribute('placeholder', pair[targetLang]);
+    }
 
-  // Translate leaf text nodes (elements with no child elements)
-  for (const el of root.querySelectorAll('*')) {
-    if (el.children && el.children.length) continue;
-    if (!el.textContent) continue;
-    const txt = el.textContent.trim();
-    if (!txt) continue;
-    const pair = AUTO_I18N_LOOKUP.get(txt);
-    if (pair) el.textContent = pair[targetLang];
+    // Translate common label attributes
+    for (const el of scope.querySelectorAll('[aria-label],[title]')) {
+      const aria = (el.getAttribute('aria-label') || '').trim();
+      const pairA = aria ? AUTO_I18N_LOOKUP.get(aria) : null;
+      if (pairA) el.setAttribute('aria-label', pairA[targetLang]);
+      const title = (el.getAttribute('title') || '').trim();
+      const pairT = title ? AUTO_I18N_LOOKUP.get(title) : null;
+      if (pairT) el.setAttribute('title', pairT[targetLang]);
+    }
+  } catch (_) {}
+
+  // Translate text nodes (including buttons with svg + text)
+  const walkerRoot = root.nodeType === 9 ? root.body : root; // document -> body
+  if (!walkerRoot) return;
+
+  const walker = document.createTreeWalker(
+    walkerRoot,
+    NodeFilter.SHOW_TEXT,
+    {
+      acceptNode(node) {
+        if (!node || !node.parentNode) return NodeFilter.FILTER_REJECT;
+        const parent = node.parentNode;
+        // Skip script/style/noscript
+        const tag = (parent.tagName || '').toUpperCase();
+        if (tag === 'SCRIPT' || tag === 'STYLE' || tag === 'NOSCRIPT') return NodeFilter.FILTER_REJECT;
+        const txt = (node.nodeValue || '').trim();
+        if (!txt) return NodeFilter.FILTER_REJECT;
+        // Exact-match only (avoid touching dynamic numbers)
+        if (!AUTO_I18N_LOOKUP.has(txt)) return NodeFilter.FILTER_REJECT;
+        return NodeFilter.FILTER_ACCEPT;
+      }
+    },
+    false
+  );
+
+  let node;
+  while ((node = walker.nextNode())) {
+    const raw = (node.nodeValue || '');
+    const trimmed = raw.trim();
+    const pair = AUTO_I18N_LOOKUP.get(trimmed);
+    if (!pair) continue;
+    // Preserve leading/trailing whitespace
+    const leading = raw.match(/^\s*/)?.[0] ?? '';
+    const trailing = raw.match(/\s*$/)?.[0] ?? '';
+    node.nodeValue = `${leading}${pair[targetLang]}${trailing}`;
   }
+}
+
+// Keep UI translated even when other render functions overwrite text later.
+// (e.g. switching tabs, re-rendering history/settings)
+let i18nObserver = null;
+let i18nRaf = 0;
+function ensureI18nObserver() {
+  if (i18nObserver) return;
+  const debounced = () => {
+    if (i18nRaf) cancelAnimationFrame(i18nRaf);
+    i18nRaf = requestAnimationFrame(() => {
+      try { applyAutoI18n(document); } catch (_) {}
+    });
+  };
+  i18nObserver = new MutationObserver(debounced);
+  try {
+    i18nObserver.observe(document.body, { childList: true, subtree: true, characterData: true });
+  } catch (_) {}
 }
 window.setLanguage = (lang) => {
   if (lang !== 'ko' && lang !== 'en') return;
@@ -185,6 +246,8 @@ window.setLanguage = (lang) => {
   } catch (_) {}
 };
 function applyLanguageToUI() {
+  // Keep translations applied even if later renders overwrite texts.
+  try { ensureI18nObserver(); } catch (_) {}
   document.documentElement.lang = currentLang;
   const langSelect = document.getElementById('langSelect');
   if (langSelect) langSelect.value = currentLang;
