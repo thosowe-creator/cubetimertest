@@ -54,20 +54,6 @@ body {
   .main-container {
     padding-bottom: 1rem;
   }
-
-  /* Desktop layout: keep timer column visually centered even with the fixed-width History panel */
-  #mainContent.main-container {
-    display: grid !important;
-    grid-template-columns: 1fr minmax(0, 720px) 360px;
-    gap: 1.5rem;
-    align-items: start;
-  }
-  #timerSection {
-    grid-column: 2;
-  }
-  #historySection {
-    grid-column: 3;
-  }
 }
 
 .modal-overlay { background: rgba(15, 23, 42, 0.4); backdrop-filter: blur(8px); display: none; position: fixed; inset: 0; z-index: 50; align-items: center; justify-content: center; padding: 1rem; }
@@ -658,8 +644,7 @@ html:not(.dark) .event-tab.active { background-color: rgb(var(--ct-accent-rgb));
 }
 
 @media (min-width: 768px) {
-  /* Desktop: compensate the fixed History panel on the right so Timer/Average stay visually centered */
-  .timer-center-shift { transform: translateY(-5vh) translateX(180px); }
+  .timer-center-shift { transform: translateY(-5vh); }
 }
 
 /* Make tap targets consistently clickable on iOS inside scroll areas */

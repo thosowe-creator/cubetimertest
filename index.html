@@ -532,6 +532,35 @@
 
                     </div>
                 </div>
+
+                <!-- Scramble -->
+                <div class="text-center w-full">
+                    <h2 class="text-slate-300 dark:text-slate-600 uppercase tracking-[0.2em] text-[10px] font-bold mb-3">Scramble</h2>
+                    <div id="scrambleBox" class="border border-slate-100 dark:border-slate-800 flex flex-col items-center justify-center md:p-8 p-6 relative rounded-3xl scramble-box transition-colors">
+                        <!-- Layout-stable scramble area: reserve space to prevent timer shifting -->
+                        <div class="h-5 flex items-center justify-center">
+                            <div id="scrambleLoadingRow" class="hidden items-center gap-2">
+                                <span class="spinner"></span>
+                                <span id="scrambleLoadingText" class="text-[11px] font-bold text-slate-400">Loading scramble…</span>
+                            </div>
+                        </div>
+
+                        <div id="scramble" class="scramble-text font-bold text-slate-600 dark:text-slate-300 whitespace-pre-wrap text-center leading-relaxed">Generating...</div>
+
+                        <div class="scramble-bottom-area relative w-full flex items-center justify-center">
+                            <div id="scrambleDiagramSkeleton" class="hidden scramble-skeleton"></div>
+                            <button id="scrambleRetryBtn" onclick="retryScramble()" class="hidden px-5 py-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 text-xs font-bold active:scale-95 transition-all">Failed. Tap to retry.</button>
+                        </div>
+
+                        <div id="mbfInputArea" class="hidden flex flex-col items-center gap-4 w-full">
+                            <p class="text-[11px] font-bold text-slate-400 uppercase tracking-widest">Enter number of cubes</p>
+                            <div class="flex gap-2 w-full max-w-xs">
+                                <input type="number" id="mbfCubeInput" min="2" max="100" placeholder="e.g. 10" class="flex-1 bg-slate-50 dark:bg-slate-800 dark:text-white border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3 text-lg font-bold text-center outline-none focus:border-blue-400 transition-all">
+                                <button onclick="generateMbfScrambles()" class="bg-blue-600 text-white px-6 py-3 rounded-xl font-bold active:scale-95 transition-all shadow-md">Go</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
             </div>
 
             <!-- Timer Area -->
@@ -555,35 +584,6 @@
                 </div>
                 
                 <div id="statusHint" class="bg-white dark:bg-slate-800 px-6 py-2 rounded-full text-slate-400 text-xs font-bold tracking-widest shadow-sm border border-slate-100 dark:border-slate-700 uppercase transition-all duration-200"></div>
-            </div>
-
-            <!-- Scramble (moved below timer for better visual centering) -->
-            <div class="text-center w-full">
-                <h2 class="text-slate-300 dark:text-slate-600 uppercase tracking-[0.2em] text-[10px] font-bold mb-3">Scramble</h2>
-                <div id="scrambleBox" class="border border-slate-100 dark:border-slate-800 flex flex-col items-center justify-center md:p-8 p-6 relative rounded-3xl scramble-box transition-colors">
-                    <!-- Layout-stable scramble area: reserve space to prevent timer shifting -->
-                    <div class="h-5 flex items-center justify-center">
-                        <div id="scrambleLoadingRow" class="hidden items-center gap-2">
-                            <span class="spinner"></span>
-                            <span id="scrambleLoadingText" class="text-[11px] font-bold text-slate-400">Loading scramble…</span>
-                        </div>
-                    </div>
-
-                    <div id="scramble" class="scramble-text font-bold text-slate-600 dark:text-slate-300 whitespace-pre-wrap text-center leading-relaxed">Generating...</div>
-
-                    <div class="scramble-bottom-area relative w-full flex items-center justify-center">
-                        <div id="scrambleDiagramSkeleton" class="hidden scramble-skeleton"></div>
-                        <button id="scrambleRetryBtn" onclick="retryScramble()" class="hidden px-5 py-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 text-xs font-bold active:scale-95 transition-all">Failed. Tap to retry.</button>
-                    </div>
-
-                    <div id="mbfInputArea" class="hidden flex flex-col items-center gap-4 w-full">
-                        <p class="text-[11px] font-bold text-slate-400 uppercase tracking-widest">Enter number of cubes</p>
-                        <div class="flex gap-2 w-full max-w-xs">
-                            <input type="number" id="mbfCubeInput" min="2" max="100" placeholder="e.g. 10" class="flex-1 bg-slate-50 dark:bg-slate-800 dark:text-white border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3 text-lg font-bold text-center outline-none focus:border-blue-400 transition-all">
-                            <button onclick="generateMbfScrambles()" class="bg-blue-600 text-white px-6 py-3 rounded-xl font-bold active:scale-95 transition-all shadow-md">Go</button>
-                        </div>
-                    </div>
-                </div>
             </div>
             </div>
         <!-- History View Section (Hidden on Mobile by default, Visible on Desktop) -->
@@ -653,11 +653,11 @@
 
     <!-- Mobile Bottom Navigation (Hidden on PC) -->
     <nav class="md:hidden fixed bottom-0 w-full bg-white dark:bg-slate-950 border-t border-slate-200 dark:border-slate-800 flex justify-around items-center h-16 pb-safe z-50 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)]">
-        <button onclick="switchMobileTab('timer')" id="mob-tab-timer" class="flex flex-col items-center justify-center flex-1 h-full text-blue-600 dark:text-blue-400">
+        <button onclick="switchMobileTab('timer')" id="mob-tab-timer" class="flex flex-col items-center justify-center w-full h-full text-blue-600 dark:text-blue-400">
             <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
             <span class="text-[10px] font-bold mt-1">Timer</span>
         </button>
-        <button onclick="switchMobileTab('history')" id="mob-tab-history" class="flex flex-col items-center justify-center flex-1 h-full text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300 transition-colors">
+        <button onclick="switchMobileTab('history')" id="mob-tab-history" class="flex flex-col items-center justify-center w-full h-full text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300 transition-colors">
             <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="m19 9-5 5-4-4-3 3"/></svg>
             <span class="text-[10px] font-bold mt-1">Stats</span>
         </button>
