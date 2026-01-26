@@ -753,6 +753,36 @@ html.dark .case-picker-btn{
   border-color: rgba(148,163,184,0.25);
 }
 
+.case-inline-btn{
+  display:inline-flex;
+  align-items:center;
+  gap:8px;
+  height: 38px;
+  padding: 0 12px;
+  border-radius: 9999px;
+  border: 1px solid rgba(148,163,184,0.25);
+  background: rgba(255,255,255,0.92);
+  color: rgb(51,65,85);
+  font-weight: 900;
+  cursor: pointer;
+  user-select: none;
+}
+html.dark .case-inline-btn{
+  background: rgba(15,23,42,0.55);
+  color: rgb(226,232,240);
+  border-color: rgba(148,163,184,0.22);
+}
+.case-inline-label{
+  font-size: 10px;
+  letter-spacing: .14em;
+  opacity: .65;
+}
+.case-inline-summary{
+  font-size: 12px;
+  letter-spacing: .02em;
+}
+
+
 .case-modal{
   position: fixed;
   inset: 0;

@@ -1992,17 +1992,6 @@ function ensureCaseSelectorDOM() {
   const wrap = document.getElementById('caseSelectWrap');
   if (!wrap) return;
 
-  // Ensure the case selector is placed inside a visible container.
-  try {
-    const evSel = document.getElementById('eventSelect');
-    if (evSel) {
-      const anchor = evSel.closest('div.w-full') || evSel.parentElement;
-      if (anchor && wrap.parentElement !== anchor.parentElement) {
-        anchor.insertAdjacentElement('afterend', wrap);
-      }
-    }
-  } catch (_) {}
-
   // Ensure main button exists
   let btn = document.getElementById('casePickerBtn');
   let summary = document.getElementById('casePickerSummary');
@@ -2165,6 +2154,8 @@ function wireCasePickerModal() {
 }
 
 function openCasePicker() {
+  // Make sure modal buttons are wired even if DOM timing changes
+  try { wireCasePickerModal(); } catch (_) {}
   const ev = String(currentEvent || '').trim();
   currentPracticeCaseOptions = getPracticeCaseOptions(ev);
 
@@ -2557,9 +2548,8 @@ async function generatePracticeScrambleText() {  const raw = _pickRandomAlgFromS
   // so for practice events we generate a correct setup scramble by inverting the alg string.
   // (This does NOT touch normal event scrambles.)
   const inv = _invertAlgString(raw);
-
-  // Light obfuscation without cube simulation: optional cube rotation + AUF.
-  const rot = ['', 'y', "y'", 'y2'][_randInt(4)];
+  // Light obfuscation without cube simulation: AUF only (no cube rotations).
+  const rot = '';
   const auf = ['', 'U', "U'", 'U2'][_randInt(4)];
   return _normalizeAlgString(_cleanAlg([rot, inv, auf].filter(Boolean).join(' ')));
 }

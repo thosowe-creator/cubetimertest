@@ -445,8 +445,8 @@
                 <!-- Event Select (Scroll) -->
                 <div class="flex flex-col items-center gap-3"> 
                     <h2 class="text-slate-300 dark:text-slate-600 uppercase tracking-[0.2em] text-[10px] font-bold">Event</h2>
-                    <div class="w-full max-w-md">
-                        <select id="eventSelect" onchange="changeEvent(this.value)" class="w-full bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-2xl px-4 py-3 text-sm font-bold text-slate-700 dark:text-slate-200 outline-none focus:border-blue-400 transition-all" aria-label="Event selector">
+                    <div class="w-full max-w-md relative">
+                        <select id="eventSelect" onchange="changeEvent(this.value)" class="w-full bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-2xl pl-4 pr-24 py-3 text-sm font-bold text-slate-700 dark:text-slate-200 outline-none focus:border-blue-400 transition-all" aria-label="Event selector">
                             <optgroup label="NxN">
                                 <option value="333">3x3</option>
                                 <option value="222">2x2</option>
@@ -476,7 +476,14 @@
                                 <option value="p_zbll">ZBLL</option>
                             </optgroup>
 </select>
-                        <!-- (UX) 스크롤 선택 기능은 유지하되 안내 문구는 제거 -->
+                        <!-- inline Case button (only for ZBLS/ZBLL) -->
+                        <div id="caseSelectWrap" class="hidden absolute inset-y-0 right-10 flex items-center">
+                            <button id="casePickerBtn" type="button" class="case-inline-btn" aria-label="Case selector">
+                                <span class="case-inline-label">CASE</span>
+                                <span id="casePickerSummary" class="case-inline-summary">Random</span>
+                            </button>
+                            <select id="caseSelect" class="hidden"></select>
+                        </div>
                     </div>
                 </div>
 
@@ -521,19 +528,7 @@
 
                         </div>
 
-                        <!-- Case selector (only for ZBLS/ZBLL) -->
-                        <div id="caseSelectWrap" class="hidden w-full flex items-center justify-center gap-2 px-2 mt-2 flex-wrap">
-                            <span class="text-[10px] font-black uppercase tracking-widest text-slate-400">Case</span>
-
-                            <button id="casePickerBtn" type="button" class="case-picker-btn">
-                                <span id="casePickerSummary">Random</span>
-                            </button>
-
-                            <!-- legacy/fallback -->
-                            <select id="caseSelect" class="hidden"></select>
                         </div>
-                            <select id="caseSelect" onchange="changePracticeCase(this.value)" class="hidden"></select>
-</div>
 
                     </div>
                 </div>
@@ -671,11 +666,7 @@
             <span class="text-[10px] font-bold mt-1">Settings</span>
         </button>
     </nav>
-
-    <!-- 외부 스크립트 연결 -->
-    <script src="script.js"></script>
-
-    <!-- Practice Case Picker Modal -->
+<!-- Practice Case Picker Modal -->
     <div id="casePickerModal" class="case-modal hidden" role="dialog" aria-modal="true" aria-labelledby="casePickerTitle">
         <div class="case-modal-panel">
             <div class="case-modal-header">
@@ -699,5 +690,8 @@
         </div>
     </div>
 
+
+    <!-- 외부 스크립트 연결 -->
+    <script src="script.js"></script>
 </body>
 </html>
