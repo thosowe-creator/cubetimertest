@@ -550,27 +550,54 @@ function positionTimerToViewportCenter() {
     // If the timer section is hidden (mobile history tab), don't fight layout.
     if (timerSection && timerSection.classList.contains('hidden')) return;
 
+    const isDesktop = window.innerWidth >= 768;
+
+    // --- Y (existing logic) ---
     const viewportCenterY = window.innerHeight / 2;
     const scrambleRect = scrambleBoxEl.getBoundingClientRect();
     const timerRect = timerContainerEl.getBoundingClientRect();
-    const timerHalf = timerRect.height / 2;
+    const timerHalfY = timerRect.height / 2;
 
-    const gap = window.innerWidth < 768 ? 10 : 14; // breathing room between scramble box and timer block
-    const minCenterY = scrambleRect.bottom + gap + timerHalf;
+    const gapY = window.innerWidth < 768 ? 10 : 14; // breathing room between scramble box and timer block
+    const minCenterY = scrambleRect.bottom + gapY + timerHalfY;
 
     // Target center is viewport center, but never collide with scramble area
     let targetCenterY = Math.max(viewportCenterY, minCenterY);
 
     // Prevent pushing past bottom (keep at least a small margin)
     const bottomMargin = (window.innerWidth < 768 ? 18 : 22);
-    const maxCenterY = window.innerHeight - bottomMargin - timerHalf;
+    const maxCenterY = window.innerHeight - bottomMargin - timerHalfY;
     targetCenterY = Math.min(targetCenterY, maxCenterY);
 
-    const currentCenterY = timerRect.top + timerHalf;
+    const currentCenterY = timerRect.top + timerHalfY;
     const dy = Math.round(targetCenterY - currentCenterY);
 
-    // Apply translation
-    timerContainerEl.style.transform = `translateY(${dy}px)`;
+    // --- X (new: keep timer block visually centered even with right history panel) ---
+    const viewportCenterX = window.innerWidth / 2;
+    const timerHalfX = timerRect.width / 2;
+
+    let targetCenterX = viewportCenterX;
+
+    // If the desktop History panel is visible, don't let the timer drift under it.
+    try {
+        if (isDesktop && historySection && !historySection.classList.contains('hidden')) {
+            const historyRect = historySection.getBoundingClientRect();
+            const gapX = 18; // margin between timer block and history panel
+            const maxCenterX = (historyRect.left - gapX - timerHalfX);
+            if (Number.isFinite(maxCenterX)) targetCenterX = Math.min(targetCenterX, maxCenterX);
+        }
+    } catch (_) {}
+
+    // Keep a small left margin too
+    const leftMargin = 18;
+    const minCenterX = leftMargin + timerHalfX;
+    targetCenterX = Math.max(targetCenterX, minCenterX);
+
+    const currentCenterX = timerRect.left + timerHalfX;
+    const dx = Math.round(targetCenterX - currentCenterX);
+
+    // Apply translation (X + Y)
+    timerContainerEl.style.transform = `translate3d(${dx}px, ${dy}px, 0)`;
     timerContainerEl.style.transition = 'transform 160ms ease';
 }
 
