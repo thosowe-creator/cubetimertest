@@ -658,7 +658,8 @@ html:not(.dark) .event-tab.active { background-color: rgb(var(--ct-accent-rgb));
 }
 
 @media (min-width: 768px) {
-  .timer-center-shift { transform: translateY(-5vh); }
+  /* Desktop: compensate the fixed History panel on the right so Timer/Average stay visually centered */
+  .timer-center-shift { transform: translateY(-5vh) translateX(180px); }
 }
 
 /* Make tap targets consistently clickable on iOS inside scroll areas */
