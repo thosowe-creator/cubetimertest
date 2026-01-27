@@ -2584,11 +2584,43 @@ function _normalizePracticeAlgString(algText) {
   const tokens = raw.split(' ').filter(Boolean);
   const out = [];
 
+  // Orientation mapping: local face -> global face
+  // Start identity and update when we encounter x/y/z.
+  let ori = { U:'U', D:'D', F:'F', B:'B', R:'R', L:'L' };
+
+  const applyRotX = () => {
+    // x: rotate as R (new U = old F, new F = old D, new D = old B, new B = old U)
+    ori = { U: ori.F, F: ori.D, D: ori.B, B: ori.U, R: ori.R, L: ori.L };
+  };
+  const applyRotY = () => {
+    // y: rotate as U (new F = old L, new R = old F, new B = old R, new L = old B)
+    ori = { U: ori.U, D: ori.D, F: ori.L, R: ori.F, B: ori.R, L: ori.B };
+  };
+  const applyRotZ = () => {
+    // z: rotate as F (new U = old L, new R = old U, new D = old R, new L = old D)
+    ori = { F: ori.F, B: ori.B, U: ori.L, R: ori.U, D: ori.R, L: ori.D };
+  };
+  const applyRotation = (axis, turns) => {
+    const t = ((turns % 4) + 4) % 4;
+    for (let i = 0; i < t; i++) {
+      if (axis === 'x') applyRotX();
+      else if (axis === 'y') applyRotY();
+      else if (axis === 'z') applyRotZ();
+    }
+  };
+
   const parse = (tok) => {
-    const m = String(tok).trim().match(/^([A-Za-z]+)(2|')?$/);
+    const s = String(tok).trim();
+
+    // Fix weird tokens like "U2'" -> treat as "U2"
+    const m2 = s.match(/^([A-Za-z]+)2'$/);
+    if (m2) return { base: m2[1], suf: '2' };
+
+    const m = s.match(/^([A-Za-z]+)(2|')?$/);
     if (!m) return null;
     return { base: m[1], suf: m[2] || '' };
   };
+
   const pow = (suf) => (suf === '2' ? 2 : (suf === "'" ? 3 : 1));
   const sufFrom = (p) => {
     const v = ((p % 4) + 4) % 4;
@@ -2598,22 +2630,52 @@ function _normalizePracticeAlgString(algText) {
     return "'"; // 3
   };
 
+  const remapBase = (base) => {
+    // Cube rotations are absorbed into `ori` and removed from output.
+    if (base === 'x' || base === 'y' || base === 'z') return base;
+
+    // Face turns
+    if (base.length === 1) {
+      const ch = base;
+      if ('URFDLB'.includes(ch)) return ori[ch];
+      if ('urfdlb'.includes(ch)) return ori[ch.toUpperCase()].toLowerCase(); // wide (r/l/u/d/f/b)
+      return base;
+    }
+
+    // Wide turns like Rw, Uw...
+    if (base.length === 2 && base[1] === 'w' && 'URFDLB'.includes(base[0])) {
+      return ori[base[0]] + 'w';
+    }
+
+    // If something else (M/E/S, 3Rw, etc.) slips through, keep it as-is.
+    return base;
+  };
+
   for (const tok of tokens) {
     const p = parse(tok);
     if (!p) { out.push(tok); continue; }
 
-    // Remove cube rotations entirely for practice scrambles
-    if (p.base === 'x' || p.base === 'y' || p.base === 'z') continue;
-
-    const last = out.length ? parse(out[out.length - 1]) : null;
-    if (last && last.base === p.base) {
-      const merged = (pow(last.suf) + pow(p.suf)) % 4;
-      if (merged === 0) out.pop();
-      else out[out.length - 1] = p.base + sufFrom(merged);
+    // Absorb cube rotations (x/y/z) into orientation mapping instead of deleting them.
+    if (p.base === 'x' || p.base === 'y' || p.base === 'z') {
+      applyRotation(p.base, pow(p.suf));
       continue;
     }
 
-    out.push(p.base + p.suf);
+    const mappedBase = remapBase(p.base);
+    const mappedTok = mappedBase + p.suf;
+
+    const last = out.length ? parse(out[out.length - 1]) : null;
+    if (last) {
+      const lastMappedBase = last.base; // already mapped in output
+      if (lastMappedBase === mappedBase) {
+        const merged = (pow(last.suf) + pow(p.suf)) % 4;
+        if (merged === 0) out.pop();
+        else out[out.length - 1] = mappedBase + sufFrom(merged);
+        continue;
+      }
+    }
+
+    out.push(mappedTok);
   }
 
   return _cleanAlg(out.join(' '));
