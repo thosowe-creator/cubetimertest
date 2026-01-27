@@ -2061,15 +2061,15 @@ function _getPracticeCaseKeyForScramble(eventId, keysAll) {
   const keys = (keysAll || []).map(String);
   _ensureCasePoolLoaded(id);
 
-  // 1) If user picked a fixed case (legacy single-select), keep honoring it.
-  if (currentPracticeCase && currentPracticeCase !== 'any') {
-    return String(currentPracticeCase);
+  // 1) Pool mode (multi-select) has priority: random from selected cases.
+  if (practiceCasePoolState[id]?.mode === 'pool') {
+    const pool = (practiceCasePoolState[id].selected || []).map(String).filter(k => keys.includes(k));
+    if (pool.length) return pool[_randInt(pool.length)];
   }
 
-  // 2) If pool mode and we have selections, random from that pool.
-  if (practiceCasePoolState[id]?.mode === 'pool') {
-    const pool = (practiceCasePoolState[id].selected || []).filter(k => keys.includes(k));
-    if (pool.length) return pool[_randInt(pool.length)];
+  // 2) Legacy single-case selection.
+  if (currentPracticeCase && currentPracticeCase !== 'any') {
+    return String(currentPracticeCase);
   }
 
   // 3) Otherwise random from all.
@@ -2516,14 +2516,18 @@ function _pickRandomAlgFromSet(eventId) {
   if (eventId === 'p_zbls') {
     const keys = Object.keys(ZBLS || {});
     const chosenKey = _getPracticeCaseKeyForScramble(eventId, keys);
+  if (practiceCasePoolState[eventId]?.mode !== 'pool') {
     currentPracticeCase = chosenKey || 'any';
+  }
     const arr = ZBLS[chosenKey] || [];
     return arr.length ? arr[_randInt(arr.length)] : '';
   }
   if (eventId === 'p_zbll') {
     const keys = Object.keys(algdbZBLL || {});
     const chosenKey = _getPracticeCaseKeyForScramble(eventId, keys);
+  if (practiceCasePoolState[eventId]?.mode !== 'pool') {
     currentPracticeCase = chosenKey || 'any';
+  }
     const arr = algdbZBLL[chosenKey] || [];
     return arr.length ? arr[_randInt(arr.length)] : '';
   }
@@ -4709,6 +4713,8 @@ window.openThemeSettings = () => {
   const title = document.getElementById('settingsTitle');
 
   if (main) main.classList.add('hidden');
+  const lic = document.getElementById('licenseBlock');
+  if (lic) lic.classList.add('hidden');
   if (theme) theme.classList.remove('hidden');
   if (back) back.classList.remove('hidden');
   if (resetAll) resetAll.classList.remove('hidden');
@@ -4737,6 +4743,8 @@ window.closeThemeSettings = () => {
 
   if (theme) theme.classList.add('hidden');
   if (main) main.classList.remove('hidden');
+  const lic = document.getElementById('licenseBlock');
+  if (lic) lic.classList.remove('hidden');
   if (back) back.classList.add('hidden');
   if (resetAll) resetAll.classList.add('hidden');
   if (title) title.textContent = 'Settings';
