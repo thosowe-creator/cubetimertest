@@ -2092,6 +2092,22 @@ function _getPracticeCaseKeyForScramble(eventId, keysAll) {
   const keys = (keysAll || []).map(String);
   _ensureCasePoolLoaded(id);
 
+  // For ZBLS/ZBLL: only two modes are supported here:
+  // - any  : random from all cases
+  // - pool : random from selected cases
+  // Legacy single-case selection (currentPracticeCase) is intentionally ignored
+  // to prevent "random -> stuck on one case" behavior.
+  if (id === 'p_zbls' || id === 'p_zbll') {
+    if (practiceCasePoolState[id]?.mode === 'pool') {
+      const pool = (practiceCasePoolState[id].selected || [])
+        .map(String)
+        .filter(k => keys.includes(k));
+      if (pool.length) return pool[_randInt(pool.length)];
+      // If pool is empty, fall back to all-random (sanitizer should avoid this anyway)
+    }
+    return keys[_randInt(keys.length)];
+  }
+
   // 1) Pool mode (multi-select) has priority: random from selected cases.
   if (practiceCasePoolState[id]?.mode === 'pool') {
     const pool = (practiceCasePoolState[id].selected || []).map(String).filter(k => keys.includes(k));
@@ -2314,19 +2330,30 @@ function _renderCasePoolList() {
   list.innerHTML = '';
   list.className = 'case-pool-list grid grid-cols-5 gap-2 custom-scroll pr-1';
 
+  const selectable = (_casePoolDraft?.mode === 'pool');
+
   keys.forEach(k => {
     const btn = document.createElement('button');
     btn.type = 'button';
     btn.className = 'case-pool-item rounded-2xl px-2 py-2 text-xs font-black active:scale-95 transition-all';
     btn.textContent = String(k);
-    if (_casePoolDraft.selected.has(String(k))) btn.classList.add('selected');
-    btn.onclick = () => {
-      const key = String(k);
-      if (_casePoolDraft.selected.has(key)) _casePoolDraft.selected.delete(key);
-      else _casePoolDraft.selected.add(key);
-      btn.classList.toggle('selected');
-      _updateCasePoolCount();
-    };
+
+    const key = String(k);
+    if (_casePoolDraft.selected.has(key)) btn.classList.add('selected');
+
+    // In "Random (any)" mode, prevent individual selection changes.
+    if (!selectable) {
+      btn.disabled = true;
+      btn.classList.add('opacity-50', 'cursor-not-allowed');
+    } else {
+      btn.onclick = () => {
+        if (_casePoolDraft.selected.has(key)) _casePoolDraft.selected.delete(key);
+        else _casePoolDraft.selected.add(key);
+        btn.classList.toggle('selected');
+        _updateCasePoolCount();
+      };
+    }
+
     list.appendChild(btn);
   });
 
@@ -2342,8 +2369,15 @@ function _renderCasePoolList() {
 function _updateCasePoolCount() {
   const cnt = document.getElementById('casePoolCount');
   if (!cnt) return;
+
   const n = _casePoolDraft.selected ? _casePoolDraft.selected.size : 0;
-  cnt.textContent = (currentLang === 'ko') ? `선택 ${n}개` : `${n} selected`;
+
+  // Count is only meaningful in "Selected" (pool) mode.
+  if (_casePoolDraft.mode === 'pool') {
+    cnt.textContent = (currentLang === 'ko') ? `선택 ${n}개` : `${n} selected`;
+  } else {
+    cnt.textContent = '';
+  }
 
   const applyBtn = document.getElementById('casePoolApplyBtn');
   if (!applyBtn) return;
@@ -2351,6 +2385,15 @@ function _updateCasePoolCount() {
   applyBtn.disabled = disabled;
   applyBtn.classList.toggle('opacity-50', disabled);
   applyBtn.classList.toggle('cursor-not-allowed', disabled);
+
+  // In "Random" mode, prevent editing actions (Clear) because individual selection is disabled.
+  const clearBtn = document.getElementById('casePoolClearBtn');
+  if (clearBtn) {
+    const lock = (_casePoolDraft.mode !== 'pool');
+    clearBtn.disabled = lock;
+    clearBtn.classList.toggle('opacity-50', lock);
+    clearBtn.classList.toggle('cursor-not-allowed', lock);
+  }
 }
 
 window.setCasePoolMode = (mode) => {
@@ -2358,14 +2401,18 @@ window.setCasePoolMode = (mode) => {
   const anyBtn = document.getElementById('casePoolModeAny');
   const poolBtn = document.getElementById('casePoolModePool');
   const hint = document.getElementById('casePoolModeHint');
+
   if (anyBtn) anyBtn.classList.toggle('active', _casePoolDraft.mode === 'any');
   if (poolBtn) poolBtn.classList.toggle('active', _casePoolDraft.mode === 'pool');
+
   if (hint) {
     hint.textContent = (_casePoolDraft.mode === 'pool')
       ? ((currentLang === 'ko') ? '선택한 케이스 안에서 랜덤' : 'Random from selected cases')
       : ((currentLang === 'ko') ? '전체 케이스에서 랜덤' : 'Random from all cases');
   }
-  _updateCasePoolCount();
+
+  // Re-render to reflect disabled/enabled case list behavior.
+  _renderCasePoolList();
 };
 
 window.clearCasePoolSelection = () => {
@@ -2644,18 +2691,12 @@ function _pickRandomAlgFromSet(eventId) {
   if (eventId === 'p_zbls') {
     const keys = Object.keys(ZBLS || {});
     const chosenKey = _getPracticeCaseKeyForScramble(eventId, keys);
-  if (practiceCasePoolState[eventId]?.mode !== 'pool') {
-    currentPracticeCase = chosenKey || 'any';
-  }
     const arr = ZBLS[chosenKey] || [];
     return arr.length ? arr[_randInt(arr.length)] : '';
   }
   if (eventId === 'p_zbll') {
     const keys = Object.keys(algdbZBLL || {});
     const chosenKey = _getPracticeCaseKeyForScramble(eventId, keys);
-  if (practiceCasePoolState[eventId]?.mode !== 'pool') {
-    currentPracticeCase = chosenKey || 'any';
-  }
     const arr = algdbZBLL[chosenKey] || [];
     return arr.length ? arr[_randInt(arr.length)] : '';
   }
