@@ -1982,6 +1982,37 @@ Object.assign(configs, {  'p_oll': { moves: configs['333'].moves, len: configs['
 
 let currentPracticeCase = 'any';
 
+// --- ZBLS Hand (R/L) ---
+const PRACTICE_ZBLS_HAND_KEY = 'practiceZblsHand';
+let practiceZblsHand = (() => {
+  try {
+    const v = String(localStorage.getItem(PRACTICE_ZBLS_HAND_KEY) || 'R').toUpperCase();
+    return (v === 'L') ? 'L' : 'R';
+  } catch (_) {
+    return 'R';
+  }
+})();
+let _zblsHandDraft = practiceZblsHand;
+
+function _saveZblsHand(value) {
+  practiceZblsHand = (value === 'L') ? 'L' : 'R';
+  try { localStorage.setItem(PRACTICE_ZBLS_HAND_KEY, practiceZblsHand); } catch (_) {}
+}
+
+function _updateZblsHandUI() {
+  const row = document.getElementById('zblsHandRow');
+  if (!row) return;
+  const r = document.getElementById('zblsHandR');
+  const l = document.getElementById('zblsHandL');
+  if (r) r.classList.toggle('active', _zblsHandDraft !== 'L');
+  if (l) l.classList.toggle('active', _zblsHandDraft === 'L');
+}
+
+window.setZblsHandDraft = (value) => {
+  _zblsHandDraft = (String(value || '').toUpperCase() === 'L') ? 'L' : 'R';
+  _updateZblsHandUI();
+};
+
 // --- Practice case pool (per-event, stored separately to prevent overlap) ---
 const PRACTICE_CASE_POOL_PREFIX = 'practiceCasePool:';
 const practiceCasePoolState = {
@@ -2207,6 +2238,18 @@ window.openCasePoolModal = () => {
   _ensureCasePoolLoaded(eventId);
   _casePoolModalEventId = eventId;
 
+  // ZBLS Hand (draft only; commit on Apply)
+  const handRow = document.getElementById('zblsHandRow');
+  if (handRow) {
+    if (eventId === 'p_zbls') {
+      handRow.classList.remove('hidden');
+      _zblsHandDraft = (practiceZblsHand === 'L') ? 'L' : 'R';
+      _updateZblsHandUI();
+    } else {
+      handRow.classList.add('hidden');
+    }
+  }
+
   // Draft from stored state
   const st = practiceCasePoolState[eventId];
   _casePoolDraft = {
@@ -2249,6 +2292,9 @@ window.closeCasePoolModal = () => {
       overlay.classList.remove('active');
     }, 150);
   }
+  // Hide hand row when closing (prevents flashing when switching events)
+  const handRow = document.getElementById('zblsHandRow');
+  if (handRow) handRow.classList.add('hidden');
   _casePoolModalEventId = null;
 };
 
@@ -2341,6 +2387,11 @@ window.applyCasePoolSelection = () => {
   practiceCasePoolState[eventId].selected = selected;
   _sanitizeCasePoolSelection(eventId);
   _saveCasePoolState(eventId);
+
+  // Commit ZBLS hand choice
+  if (eventId === 'p_zbls') {
+    _saveZblsHand(_zblsHandDraft);
+  }
 
   // Avoid overriding pool mode by legacy single-case selection
   currentPracticeCase = 'any';
@@ -2442,6 +2493,38 @@ function _invertAlgString(algText) {
   const parts = _cleanAlg(algText).split(' ').filter(Boolean);
   const inv = parts.reverse().map(_invertMoveToken);
   return _cleanAlg(inv.join(' '));
+}
+
+// ZBLS left-hand mode: swap R<->L (including r/l, Rw/Lw, 3Rw/3Lw...) and invert direction.
+// Example: R L U B -> L' R' U' B'
+function _swapRLAndInvertAlgString(algText) {
+  const parts = _cleanAlg(algText).split(' ').filter(Boolean);
+  const out = parts.map((tok) => {
+    const m = String(tok).trim().match(/^([0-9]*)([A-Za-z]+)(2|')?$/);
+    if (!m) return tok;
+    const prefixNum = m[1] || '';
+    let base = m[2] || '';
+    const suf = m[3] || '';
+
+    // swap only the first face letter if it's R/L (or r/l)
+    if (base.length) {
+      const first = base[0];
+      const rest = base.slice(1);
+      if (first === 'R') base = 'L' + rest;
+      else if (first === 'L') base = 'R' + rest;
+      else if (first === 'r') base = 'l' + rest;
+      else if (first === 'l') base = 'r' + rest;
+    }
+
+    // invert suffix (keep 2 as-is)
+    let nextSuf = '';
+    if (suf === '2') nextSuf = '2';
+    else if (suf === "'") nextSuf = '';
+    else nextSuf = "'";
+
+    return `${prefixNum}${base}${nextSuf}`;
+  });
+  return _cleanAlg(out.join(' '));
 }
 
 // Convert practice scramble tokens to a cubing.js-friendly form for scramble-display.
@@ -2611,7 +2694,12 @@ async function generatePracticeScrambleText() {  const raw = _pickRandomAlgFromS
   // Light obfuscation without cube simulation: optional cube rotation + AUF.
   const rot = ['', 'y', "y'", 'y2'][_randInt(4)];
   const auf = ['', 'U', "U'", 'U2'][_randInt(4)];
-  return _cleanAlg([rot, inv, auf].filter(Boolean).join(' '));
+  let scramble = _cleanAlg([rot, inv, auf].filter(Boolean).join(' '));
+  // ZBLS hand mode (R/L)
+  if (String(currentEvent || '').trim() === 'p_zbls' && practiceZblsHand === 'L') {
+    scramble = _swapRLAndInvertAlgString(scramble);
+  }
+  return scramble;
 }
 
 const suffixes = ["", "'", "2"];
