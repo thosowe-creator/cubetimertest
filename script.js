@@ -550,54 +550,27 @@ function positionTimerToViewportCenter() {
     // If the timer section is hidden (mobile history tab), don't fight layout.
     if (timerSection && timerSection.classList.contains('hidden')) return;
 
-    const isDesktop = window.innerWidth >= 768;
-
-    // --- Y (existing logic) ---
     const viewportCenterY = window.innerHeight / 2;
     const scrambleRect = scrambleBoxEl.getBoundingClientRect();
     const timerRect = timerContainerEl.getBoundingClientRect();
-    const timerHalfY = timerRect.height / 2;
+    const timerHalf = timerRect.height / 2;
 
-    const gapY = window.innerWidth < 768 ? 10 : 14; // breathing room between scramble box and timer block
-    const minCenterY = scrambleRect.bottom + gapY + timerHalfY;
+    const gap = window.innerWidth < 768 ? 10 : 14; // breathing room between scramble box and timer block
+    const minCenterY = scrambleRect.bottom + gap + timerHalf;
 
     // Target center is viewport center, but never collide with scramble area
     let targetCenterY = Math.max(viewportCenterY, minCenterY);
 
     // Prevent pushing past bottom (keep at least a small margin)
     const bottomMargin = (window.innerWidth < 768 ? 18 : 22);
-    const maxCenterY = window.innerHeight - bottomMargin - timerHalfY;
+    const maxCenterY = window.innerHeight - bottomMargin - timerHalf;
     targetCenterY = Math.min(targetCenterY, maxCenterY);
 
-    const currentCenterY = timerRect.top + timerHalfY;
+    const currentCenterY = timerRect.top + timerHalf;
     const dy = Math.round(targetCenterY - currentCenterY);
 
-    // --- X (new: keep timer block visually centered even with right history panel) ---
-    const viewportCenterX = window.innerWidth / 2;
-    const timerHalfX = timerRect.width / 2;
-
-    let targetCenterX = viewportCenterX;
-
-    // If the desktop History panel is visible, don't let the timer drift under it.
-    try {
-        if (isDesktop && historySection && !historySection.classList.contains('hidden')) {
-            const historyRect = historySection.getBoundingClientRect();
-            const gapX = 18; // margin between timer block and history panel
-            const maxCenterX = (historyRect.left - gapX - timerHalfX);
-            if (Number.isFinite(maxCenterX)) targetCenterX = Math.min(targetCenterX, maxCenterX);
-        }
-    } catch (_) {}
-
-    // Keep a small left margin too
-    const leftMargin = 18;
-    const minCenterX = leftMargin + timerHalfX;
-    targetCenterX = Math.max(targetCenterX, minCenterX);
-
-    const currentCenterX = timerRect.left + timerHalfX;
-    const dx = Math.round(targetCenterX - currentCenterX);
-
-    // Apply translation (X + Y)
-    timerContainerEl.style.transform = `translate3d(${dx}px, ${dy}px, 0)`;
+    // Apply translation
+    timerContainerEl.style.transform = `translateY(${dy}px)`;
     timerContainerEl.style.transition = 'transform 160ms ease';
 }
 
@@ -2007,10 +1980,128 @@ Object.assign(configs, {  'p_oll': { moves: configs['333'].moves, len: configs['
   'p_zbll': { moves: configs['333'].moves, len: configs['333'].len, n: 3, cat: 'practice' },
 });
 
-let currentPracticeCase = 'any'; // legacy (single-select). Kept for backward compatibility.
-// Multi-select practice cases. Contains 'any' when Random is enabled.
-let selectedPracticeCases = new Set(['any']);
-let currentPracticeCaseOptions = null; // current event's options (including 'any')
+let currentPracticeCase = 'any';
+
+// --- Practice case pool (per-event, stored separately to prevent overlap) ---
+const PRACTICE_CASE_POOL_PREFIX = 'practiceCasePool:';
+const practiceCasePoolState = {
+  'p_zbls': { mode: 'any', selected: [] },
+  'p_zbll': { mode: 'any', selected: [] },
+};
+
+function _poolKey(eventId) {
+  return PRACTICE_CASE_POOL_PREFIX + String(eventId || '').trim();
+}
+
+function _loadCasePoolState(eventId) {
+  const id = String(eventId || '').trim();
+  if (!practiceCasePoolState[id]) return;
+  try {
+    const raw = localStorage.getItem(_poolKey(id));
+    if (!raw) return;
+    const parsed = JSON.parse(raw);
+    const mode = (parsed && (parsed.mode === 'pool')) ? 'pool' : 'any';
+    const selected = Array.isArray(parsed?.selected) ? parsed.selected.map(String) : [];
+    practiceCasePoolState[id].mode = mode;
+    practiceCasePoolState[id].selected = selected;
+  } catch (_) {
+    // ignore corrupt storage
+  }
+}
+
+function _saveCasePoolState(eventId) {
+  const id = String(eventId || '').trim();
+  if (!practiceCasePoolState[id]) return;
+  try {
+    const st = practiceCasePoolState[id];
+    localStorage.setItem(_poolKey(id), JSON.stringify({
+      mode: (st.mode === 'pool') ? 'pool' : 'any',
+      selected: Array.isArray(st.selected) ? st.selected.map(String) : [],
+    }));
+  } catch (_) {}
+}
+
+function _getAllowedCaseKeys(eventId) {
+  const options = getPracticeCaseOptions(eventId) || [];
+  return options.filter(k => k !== 'any').map(String);
+}
+
+function _sanitizeCasePoolSelection(eventId) {
+  const id = String(eventId || '').trim();
+  if (!practiceCasePoolState[id]) return;
+  const allowed = new Set(_getAllowedCaseKeys(id));
+  const uniq = [];
+  const seen = new Set();
+  for (const k of (practiceCasePoolState[id].selected || [])) {
+    const kk = String(k);
+    if (!allowed.has(kk)) continue;
+    if (seen.has(kk)) continue;
+    seen.add(kk);
+    uniq.push(kk);
+  }
+  practiceCasePoolState[id].selected = uniq;
+  // If pool mode but nothing selected, fall back to any to avoid silent "empty random"
+  if (practiceCasePoolState[id].mode === 'pool' && uniq.length === 0) {
+    practiceCasePoolState[id].mode = 'any';
+  }
+}
+
+function _ensureCasePoolLoaded(eventId) {
+  const id = String(eventId || '').trim();
+  if (!practiceCasePoolState[id]) return;
+  // Load once lazily
+  if (practiceCasePoolState[id]._loaded) return;
+  practiceCasePoolState[id]._loaded = true;
+  _loadCasePoolState(id);
+  _sanitizeCasePoolSelection(id);
+}
+
+function _getPracticeCaseKeyForScramble(eventId, keysAll) {
+  const id = String(eventId || '').trim();
+  const keys = (keysAll || []).map(String);
+  _ensureCasePoolLoaded(id);
+
+  // 1) If user picked a fixed case (legacy single-select), keep honoring it.
+  if (currentPracticeCase && currentPracticeCase !== 'any') {
+    return String(currentPracticeCase);
+  }
+
+  // 2) If pool mode and we have selections, random from that pool.
+  if (practiceCasePoolState[id]?.mode === 'pool') {
+    const pool = (practiceCasePoolState[id].selected || []).filter(k => keys.includes(k));
+    if (pool.length) return pool[_randInt(pool.length)];
+  }
+
+  // 3) Otherwise random from all.
+  return keys[_randInt(keys.length)];
+}
+
+function updateCasePoolSummary(eventId) {
+  const btn = document.getElementById('casePoolOpenBtn');
+  const sum = document.getElementById('casePoolSummary');
+  if (!btn || !sum) return;
+
+  const id = String(eventId || '').trim();
+  if (id !== 'p_zbls' && id !== 'p_zbll') {
+    btn.textContent = (currentLang === 'ko') ? '랜덤' : 'Random';
+    sum.textContent = '';
+    return;
+  }
+
+  _ensureCasePoolLoaded(id);
+  const st = practiceCasePoolState[id];
+  const count = (st.selected || []).length;
+
+  // Button label
+  btn.textContent = (currentLang === 'ko') ? '선택…' : 'Select…';
+
+  // Summary
+  if (st.mode === 'pool') {
+    sum.textContent = (currentLang === 'ko') ? `선택 ${count}개` : `${count} selected`;
+  } else {
+    sum.textContent = (currentLang === 'ko') ? '전체 랜덤' : 'All random';
+  }
+}
 
 
 // [FIX] Some deployed HTML variants contain an empty #caseSelectWrap without required children.
@@ -2019,39 +2110,45 @@ function ensureCaseSelectorDOM() {
   const wrap = document.getElementById('caseSelectWrap');
   if (!wrap) return;
 
-  // Ensure main button exists
-  let btn = document.getElementById('casePickerBtn');
-  let summary = document.getElementById('casePickerSummary');
-  if (!btn) {
-    // If HTML wasn't updated for some reason, build minimal DOM
-    wrap.innerHTML = `
-      <span class="text-[10px] font-black uppercase tracking-widest text-slate-400">Case</span>
-      <button id="casePickerBtn" type="button" class="case-picker-btn"><span id="casePickerSummary">Random</span></button>
-      <select id="caseSelect" class="hidden"></select>
-    `;
-    btn = document.getElementById('casePickerBtn');
-    summary = document.getElementById('casePickerSummary');
+  // --- [FIX] Ensure the case selector is placed inside a visible container ---
+  // In this UI, #caseSelectWrap was originally located under #group-practice,
+  // which is hidden by default (legacy tab UI). When the user selects ZBLS/ZBLL
+  // via the main dropdown, the parent stays hidden, so the case selector never
+  // appears even though we remove 'hidden' from the wrap itself.
+  //
+  // Move #caseSelectWrap right under the main event selector section (always visible),
+  // unless it is already there.
+  try {
+    const evSel = document.getElementById('eventSelect');
+    if (evSel) {
+      // Prefer the immediate container around the select
+      const anchor = evSel.closest('div.w-full') || evSel.parentElement;
+      if (anchor && wrap.parentElement !== anchor.parentElement) {
+        // Insert wrap right after the anchor container
+        anchor.insertAdjacentElement('afterend', wrap);
+      }
+    }
+  } catch (_) {}
+
+  // If a full layout is already present, do nothing.
+  let tabs = document.getElementById('caseTabs');
+  let sel = document.getElementById('caseSelect');
+
+  if (!tabs) {
+    tabs = document.createElement('div');
+    tabs.id = 'caseTabs';
+    // keep styling reasonably consistent even if HTML was missing
+    tabs.className = 'flex items-center gap-1 overflow-x-auto whitespace-nowrap no-scrollbar py-2';
+    wrap.appendChild(tabs);
   }
 
-  // Legacy hidden select (kept so older inline handlers won't explode)
-  const sel = document.getElementById('caseSelect');
-  if (sel) {
-    sel.onchange = () => {
-      const v = String(sel.value || 'any');
-      // single-pick -> set multi selection to only that (and disable random if not any)
-      setSelectedPracticeCases(v === 'any' ? ['any'] : [v]);
-      // keep legacy variable in sync
-      currentPracticeCase = v;
-      if (isPracticeEvent(currentEvent)) generateScramble();
-    };
+  if (!sel) {
+    sel = document.createElement('select');
+    sel.id = 'caseSelect';
+    sel.className = 'hidden';
+    sel.onchange = () => changePracticeCase(sel.value);
+    wrap.appendChild(sel);
   }
-
-  if (btn) {
-    btn.onclick = () => openCasePicker();
-  }
-
-  // Wire modal buttons once
-  wireCasePickerModal();
 }
 
 function isPracticeEvent(eventId) {
@@ -2059,194 +2156,13 @@ function isPracticeEvent(eventId) {
 }
 
 window.changePracticeCase = (val) => {
-  // Legacy entrypoint (single pick). Convert to multi-selection.
-  const v = String(val || 'any');
-  currentPracticeCase = v;
-  setSelectedPracticeCases(v === 'any' ? ['any'] : [v]);
+  currentPracticeCase = val || 'any';
+  // Sync UI state for tabs/select
+  updateCaseTabActive();
+  const sel = document.getElementById('caseSelect');
+  if (sel) sel.value = currentPracticeCase;
   if (isPracticeEvent(currentEvent)) generateScramble();
 };
-
-function setSelectedPracticeCases(arr) {
-  const next = new Set((arr || []).map(String).filter(Boolean));
-  // If nothing selected, default to Random
-  if (next.size === 0) next.add('any');
-  selectedPracticeCases = next;
-  updateCasePickerSummary();
-  // Persist
-  try { saveData(); } catch (_) {}
-}
-
-function getSelectedPracticeCasePool(eventId) {
-  const options = (getPracticeCaseOptions(eventId) || []).map(String);
-  const actual = options.filter(k => k !== 'any');
-  if (!actual.length) return [];
-
-  // Random enabled OR no concrete selection -> all cases
-  const hasAny = selectedPracticeCases.has('any');
-  const picked = Array.from(selectedPracticeCases).filter(k => k !== 'any');
-  if (hasAny || picked.length === 0) return actual;
-
-  // Only use intersection; if empty, fall back to all
-  const setActual = new Set(actual);
-  const inter = picked.filter(k => setActual.has(k));
-  return inter.length ? inter : actual;
-}
-
-function updateCasePickerSummary() {
-  const summary = document.getElementById('casePickerSummary');
-  if (!summary) return;
-
-  const ev = String(currentEvent || '').trim();
-  const opts = (getPracticeCaseOptions(ev) || []).filter(k => k !== 'any');
-  const hasAny = selectedPracticeCases.has('any');
-  const picked = Array.from(selectedPracticeCases).filter(k => k !== 'any');
-
-  // If this event has no options, keep default label.
-  if (!opts.length) {
-    summary.textContent = (currentLang === 'ko') ? '랜덤' : 'Random';
-    return;
-  }
-
-  // If random only
-  if (hasAny && picked.length === 0) {
-    summary.textContent = (currentLang === 'ko') ? '랜덤' : 'Random';
-    return;
-  }
-
-  // If random + some
-  if (hasAny && picked.length > 0) {
-    summary.textContent =
-      (currentLang === 'ko')
-        ? `랜덤 + ${picked.length}개 선택`
-        : `Random + ${picked.length} selected`;
-    return;
-  }
-
-  // No random, some selected
-  if (!hasAny && picked.length === 1) {
-    summary.textContent = picked[0];
-    return;
-  }
-
-  summary.textContent =
-    (currentLang === 'ko')
-      ? `${picked.length}개 선택`
-      : `${picked.length} selected`;
-}
-
-let _casePickerWired = false;
-let _casePickerTemp = new Set();
-
-function wireCasePickerModal() {
-  if (_casePickerWired) return;
-  _casePickerWired = true;
-
-  const modal = document.getElementById('casePickerModal');
-  const btnClose = document.getElementById('casePickerCloseBtn');
-  const btnApply = document.getElementById('casePickerApplyBtn');
-  const btnClear = document.getElementById('casePickerClearBtn');
-  const anyChk = document.getElementById('casePickerAny');
-
-  if (btnClose) btnClose.onclick = () => closeCasePicker();
-  if (btnApply) btnApply.onclick = () => applyCasePicker();
-  if (btnClear) btnClear.onclick = () => {
-    // Clear concrete selections; keep Random on.
-    _casePickerTemp = new Set(['any']);
-    renderCasePickerList();
-  };
-
-  if (anyChk) {
-    anyChk.onchange = () => {
-      const on = !!anyChk.checked;
-      if (on) _casePickerTemp.add('any');
-      else _casePickerTemp.delete('any');
-      renderCasePickerList(false);
-    };
-  }
-
-  // Close by clicking backdrop
-  if (modal) {
-    modal.addEventListener('click', (e) => {
-      if (e.target === modal) closeCasePicker();
-    });
-  }
-
-  // ESC close
-  document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape') {
-      const m = document.getElementById('casePickerModal');
-      if (m && !m.classList.contains('hidden')) closeCasePicker();
-    }
-  });
-}
-
-function openCasePicker() {
-  // Make sure modal buttons are wired even if DOM timing changes
-  try { wireCasePickerModal(); } catch (_) {}
-  const ev = String(currentEvent || '').trim();
-  currentPracticeCaseOptions = getPracticeCaseOptions(ev);
-
-  const modal = document.getElementById('casePickerModal');
-  if (!modal) return;
-
-  // Seed temp set from current selection
-  _casePickerTemp = new Set(Array.from(selectedPracticeCases));
-
-  // If selection is empty for some reason, default to random
-  if (_casePickerTemp.size === 0) _casePickerTemp.add('any');
-
-  renderCasePickerList(true);
-
-  modal.classList.remove('hidden');
-  // prevent background scroll
-  try { document.body.style.overflow = 'hidden'; } catch (_) {}
-}
-
-function closeCasePicker() {
-  const modal = document.getElementById('casePickerModal');
-  if (!modal) return;
-  modal.classList.add('hidden');
-  try { document.body.style.overflow = ''; } catch (_) {}
-}
-
-function applyCasePicker() {
-  // Apply temp to real selection
-  setSelectedPracticeCases(Array.from(_casePickerTemp));
-  closeCasePicker();
-  if (isPracticeEvent(currentEvent)) generateScramble();
-}
-
-function renderCasePickerList(syncAny = true) {
-  const list = document.getElementById('casePickerList');
-  const anyChk = document.getElementById('casePickerAny');
-  if (!list) return;
-
-  const options = (currentPracticeCaseOptions || []).map(String);
-  const cases = options.filter(k => k !== 'any');
-
-  list.innerHTML = '';
-
-  if (anyChk && syncAny) anyChk.checked = _casePickerTemp.has('any');
-
-  cases.forEach((k) => {
-    const id = `casepick_${String(k).replace(/[^a-zA-Z0-9_-]/g, '_')}`;
-    const checked = _casePickerTemp.has(k);
-    const item = document.createElement('label');
-    item.className = 'case-modal-item';
-    item.setAttribute('for', id);
-    item.innerHTML = `<input id="${id}" type="checkbox" ${checked ? 'checked' : ''} />
-                      <span>${String(k)}</span>`;
-    item.onclick = (e) => {
-      // allow clicking anywhere to toggle
-      e.preventDefault();
-      const on = !_casePickerTemp.has(k);
-      if (on) _casePickerTemp.add(k);
-      else _casePickerTemp.delete(k);
-      renderCasePickerList(false);
-    };
-    list.appendChild(item);
-  });
-}
 
 function getPracticeCaseOptions(eventId) {
   if (eventId === 'p_zbls') {
@@ -2281,6 +2197,160 @@ function updateCaseTabActive() {
   });
 }
 
+// --- Case pool modal (Settings-style) ---
+let _casePoolModalEventId = null;
+let _casePoolDraft = { mode: 'any', selected: new Set() };
+
+window.openCasePoolModal = () => {
+  const eventId = String(currentEvent || '').trim();
+  if (eventId !== 'p_zbls' && eventId !== 'p_zbll') return;
+  _ensureCasePoolLoaded(eventId);
+  _casePoolModalEventId = eventId;
+
+  // Draft from stored state
+  const st = practiceCasePoolState[eventId];
+  _casePoolDraft = {
+    mode: st.mode === 'pool' ? 'pool' : 'any',
+    selected: new Set((st.selected || []).map(String)),
+  };
+
+  // Title
+  const title = document.getElementById('casePoolTitle');
+  if (title) {
+    const label = PRACTICE_EVENTS?.[eventId]?.label || 'Case';
+    title.textContent = (currentLang === 'ko') ? `${label} 케이스 선택` : `${label} Case Selection`;
+  }
+
+  // Render list
+  _renderCasePoolList();
+
+  // Show modal
+  const overlay = document.getElementById('casePoolOverlay');
+  const modal = document.getElementById('casePoolModal');
+  if (overlay && modal) {
+    overlay.classList.add('active');
+    requestAnimationFrame(() => {
+      modal.classList.remove('scale-95', 'opacity-0');
+      modal.classList.add('scale-100', 'opacity-100');
+    });
+  }
+
+  // Initialize mode UI
+  window.setCasePoolMode(_casePoolDraft.mode);
+};
+
+window.closeCasePoolModal = () => {
+  const overlay = document.getElementById('casePoolOverlay');
+  const modal = document.getElementById('casePoolModal');
+  if (overlay && modal) {
+    modal.classList.add('scale-95', 'opacity-0');
+    modal.classList.remove('scale-100', 'opacity-100');
+    setTimeout(() => {
+      overlay.classList.remove('active');
+    }, 150);
+  }
+  _casePoolModalEventId = null;
+};
+
+window.handleOutsideCasePoolClick = (event) => {
+  if (event?.target?.id === 'casePoolOverlay') window.closeCasePoolModal();
+};
+
+function _renderCasePoolList() {
+  const eventId = _casePoolModalEventId;
+  if (!eventId) return;
+
+  const list = document.getElementById('casePoolList');
+  const hint = document.getElementById('casePoolModeHint');
+  if (!list) return;
+
+  const keys = _getAllowedCaseKeys(eventId);
+  list.innerHTML = '';
+  list.className = 'case-pool-list grid grid-cols-5 gap-2 custom-scroll pr-1';
+
+  keys.forEach(k => {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'case-pool-item rounded-2xl px-2 py-2 text-xs font-black active:scale-95 transition-all';
+    btn.textContent = String(k);
+    if (_casePoolDraft.selected.has(String(k))) btn.classList.add('selected');
+    btn.onclick = () => {
+      const key = String(k);
+      if (_casePoolDraft.selected.has(key)) _casePoolDraft.selected.delete(key);
+      else _casePoolDraft.selected.add(key);
+      btn.classList.toggle('selected');
+      _updateCasePoolCount();
+    };
+    list.appendChild(btn);
+  });
+
+  _updateCasePoolCount();
+
+  if (hint) {
+    hint.textContent = (_casePoolDraft.mode === 'pool')
+      ? ((currentLang === 'ko') ? '선택한 케이스 안에서 랜덤' : 'Random from selected cases')
+      : ((currentLang === 'ko') ? '전체 케이스에서 랜덤' : 'Random from all cases');
+  }
+}
+
+function _updateCasePoolCount() {
+  const cnt = document.getElementById('casePoolCount');
+  if (!cnt) return;
+  const n = _casePoolDraft.selected ? _casePoolDraft.selected.size : 0;
+  cnt.textContent = (currentLang === 'ko') ? `선택 ${n}개` : `${n} selected`;
+
+  const applyBtn = document.getElementById('casePoolApplyBtn');
+  if (!applyBtn) return;
+  const disabled = (_casePoolDraft.mode === 'pool' && n === 0);
+  applyBtn.disabled = disabled;
+  applyBtn.classList.toggle('opacity-50', disabled);
+  applyBtn.classList.toggle('cursor-not-allowed', disabled);
+}
+
+window.setCasePoolMode = (mode) => {
+  _casePoolDraft.mode = (mode === 'pool') ? 'pool' : 'any';
+  const anyBtn = document.getElementById('casePoolModeAny');
+  const poolBtn = document.getElementById('casePoolModePool');
+  const hint = document.getElementById('casePoolModeHint');
+  if (anyBtn) anyBtn.classList.toggle('active', _casePoolDraft.mode === 'any');
+  if (poolBtn) poolBtn.classList.toggle('active', _casePoolDraft.mode === 'pool');
+  if (hint) {
+    hint.textContent = (_casePoolDraft.mode === 'pool')
+      ? ((currentLang === 'ko') ? '선택한 케이스 안에서 랜덤' : 'Random from selected cases')
+      : ((currentLang === 'ko') ? '전체 케이스에서 랜덤' : 'Random from all cases');
+  }
+  _updateCasePoolCount();
+};
+
+window.clearCasePoolSelection = () => {
+  if (_casePoolDraft?.selected) _casePoolDraft.selected.clear();
+  _renderCasePoolList();
+};
+
+window.applyCasePoolSelection = () => {
+  const eventId = _casePoolModalEventId;
+  if (!eventId) return;
+
+  const selected = Array.from(_casePoolDraft.selected || []).map(String);
+  const mode = (_casePoolDraft.mode === 'pool') ? 'pool' : 'any';
+
+  if (mode === 'pool' && selected.length === 0) return;
+
+  _ensureCasePoolLoaded(eventId);
+  practiceCasePoolState[eventId].mode = mode;
+  practiceCasePoolState[eventId].selected = selected;
+  _sanitizeCasePoolSelection(eventId);
+  _saveCasePoolState(eventId);
+
+  // Avoid overriding pool mode by legacy single-case selection
+  currentPracticeCase = 'any';
+
+  updateCasePoolSummary(eventId);
+  window.closeCasePoolModal();
+  if (isPracticeEvent(currentEvent)) generateScramble();
+};
+
+
 function renderCaseTabs(options) {
   const tabs = document.getElementById('caseTabs');
   if (!tabs) return;
@@ -2300,17 +2370,19 @@ function renderCaseTabs(options) {
 function setCaseSelectorVisible(visible, options = null) {
   const wrap = document.getElementById('caseSelectWrap');
   const sel = document.getElementById('caseSelect');
+  const tabs = document.getElementById('caseTabs');
   if (!wrap) return;
-
   if (!visible) {
-    currentPracticeCaseOptions = null;
     wrap.classList.add('hidden');
+    if (tabs) tabs.innerHTML = '';
     return;
   }
-
-  currentPracticeCaseOptions = (options || ['any']).map(String);
-
-  // Keep legacy select in sync for compatibility
+  // Populate tabs
+  renderCaseTabs(options || ['any']);
+  // Keep selection if possible
+  const exists = (options || []).includes(currentPracticeCase);
+  currentPracticeCase = exists ? currentPracticeCase : 'any';
+  // Sync hidden <select> for fallback/compat
   if (sel) {
     sel.innerHTML = '';
     (options || ['any']).forEach(k => {
@@ -2319,14 +2391,11 @@ function setCaseSelectorVisible(visible, options = null) {
       opt.textContent = (k === 'any') ? ((currentLang === 'ko') ? '랜덤' : 'Random') : String(k);
       sel.appendChild(opt);
     });
-
-    // Choose a representative value for legacy select
-    const picked = Array.from(selectedPracticeCases).filter(x => x !== 'any');
-    sel.value = selectedPracticeCases.has('any') ? 'any' : (picked[0] || 'any');
+    sel.value = currentPracticeCase;
   }
-
+  updateCaseTabActive();
+  updateCasePoolSummary(currentEvent);
   wrap.classList.remove('hidden');
-  updateCasePickerSummary();
 }
 
 function refreshPracticeUI() {
@@ -2336,6 +2405,7 @@ function refreshPracticeUI() {
   const eventId = String(currentEvent || '').trim();
   const options = getPracticeCaseOptions(eventId);
   setCaseSelectorVisible(!!options, options);
+  updateCasePoolSummary(eventId);
 }
 
 // --- Route 1 scramble builders (adapted from Alg-Trainer RubiksCube.js) ---
@@ -2351,50 +2421,6 @@ function _cleanAlg(s) {
     .replace(/[()]/g, ' ')
     .replace(/\s+/g, ' ')
     .trim();
-}
-
-function _normalizeAlgString(alg) {
-  // 1) remove parentheses remnants
-  const s = String(alg || '').replace(/[()]/g, ' ').replace(/\s+/g, ' ').trim();
-  if (!s) return '';
-  const toks = s.split(' ').map(t => t.trim()).filter(Boolean);
-  const out = [];
-  const powOf = (tok) => {
-    if (tok.endsWith("2")) return 2;
-    if (tok.endsWith("'")) return 3;
-    return 1;
-  };
-  const baseOf = (tok) => {
-    if (tok.endsWith("2") || tok.endsWith("'")) return tok.slice(0, -1);
-    return tok;
-  };
-  const tokOf = (base, pow) => {
-    const p = ((pow % 4) + 4) % 4;
-    if (p === 0) return '';
-    if (p === 1) return base;
-    if (p === 2) return base + '2';
-    return base + "'";
-  };
-
-  for (const t of toks) {
-    const base = baseOf(t);
-    const pow = powOf(t);
-
-    if (out.length) {
-      const prev = out[out.length - 1];
-      const pbase = baseOf(prev);
-      const ppow = powOf(prev);
-
-      if (pbase === base) {
-        const merged = tokOf(base, ppow + pow);
-        out.pop();
-        if (merged) out.push(merged);
-        continue;
-      }
-    }
-    out.push(t);
-  }
-  return out.join(' ');
 }
 
 // --- Practice alg helpers (string-level, no cube simulation) ---
@@ -2488,15 +2514,17 @@ function _pickRandomAlgFromSet(eventId) {
     return arr.length ? arr[_randInt(arr.length)] : '';
   }
   if (eventId === 'p_zbls') {
-    const pool = getSelectedPracticeCasePool('p_zbls');
-    const chosenKey = pool.length ? pool[_randInt(pool.length)] : '';
-    const arr = (ZBLS && chosenKey) ? (ZBLS[chosenKey] || []) : [];
+    const keys = Object.keys(ZBLS || {});
+    const chosenKey = _getPracticeCaseKeyForScramble(eventId, keys);
+    currentPracticeCase = chosenKey || 'any';
+    const arr = ZBLS[chosenKey] || [];
     return arr.length ? arr[_randInt(arr.length)] : '';
   }
   if (eventId === 'p_zbll') {
-    const pool = getSelectedPracticeCasePool('p_zbll');
-    const chosenKey = pool.length ? pool[_randInt(pool.length)] : '';
-    const arr = (algdbZBLL && chosenKey) ? (algdbZBLL[chosenKey] || []) : [];
+    const keys = Object.keys(algdbZBLL || {});
+    const chosenKey = _getPracticeCaseKeyForScramble(eventId, keys);
+    currentPracticeCase = chosenKey || 'any';
+    const arr = algdbZBLL[chosenKey] || [];
     return arr.length ? arr[_randInt(arr.length)] : '';
   }
   return '';
@@ -2575,10 +2603,11 @@ async function generatePracticeScrambleText() {  const raw = _pickRandomAlgFromS
   // so for practice events we generate a correct setup scramble by inverting the alg string.
   // (This does NOT touch normal event scrambles.)
   const inv = _invertAlgString(raw);
-  // Light obfuscation without cube simulation: AUF only (no cube rotations).
-  const rot = '';
+
+  // Light obfuscation without cube simulation: optional cube rotation + AUF.
+  const rot = ['', 'y', "y'", 'y2'][_randInt(4)];
   const auf = ['', 'U', "U'", 'U2'][_randInt(4)];
-  return _normalizeAlgString(_cleanAlg([rot, inv, auf].filter(Boolean).join(' ')));
+  return _cleanAlg([rot, inv, auf].filter(Boolean).join(' '));
 }
 
 const suffixes = ["", "'", "2"];
@@ -3141,15 +3170,6 @@ function importData(event) {
                     isWakeLockEnabled = data.settings.isWakeLockEnabled || false;
                     const isDark = data.settings.isDarkMode || false;
                     isInspectionMode = data.settings.isInspectionMode || false;
-                // Multi-select practice case preferences
-                try {
-                    const pc = data.settings.practiceCases;
-                    if (Array.isArray(pc) && pc.length) {
-                        selectedPracticeCases = new Set(pc.map(String).filter(Boolean));
-                    } else {
-                        selectedPracticeCases = new Set(['any']);
-                    }
-                } catch (_) { selectedPracticeCases = new Set(['any']); }
                     
                     precisionToggle.checked = (precision === 3);
                     avgModeToggle.checked = isAo5Mode;
@@ -3185,8 +3205,7 @@ function saveData() {
             holdDuration,
             isDarkMode: document.documentElement.classList.contains('dark'),
             isWakeLockEnabled,
-            isInspectionMode,
-            practiceCases: Array.from(selectedPracticeCases || [])
+            isInspectionMode
         }
     };
     localStorage.setItem('cubeTimerData_v5', JSON.stringify(data));
@@ -3206,15 +3225,6 @@ function loadData() {
                 const isDark = data.settings.isDarkMode || false;
                 isWakeLockEnabled = data.settings.isWakeLockEnabled || false;
                 isInspectionMode = data.settings.isInspectionMode || false;
-                // Multi-select practice case preferences
-                try {
-                    const pc = data.settings.practiceCases;
-                    if (Array.isArray(pc) && pc.length) {
-                        selectedPracticeCases = new Set(pc.map(String).filter(Boolean));
-                    } else {
-                        selectedPracticeCases = new Set(['any']);
-                    }
-                } catch (_) { selectedPracticeCases = new Set(['any']); }
                 precisionToggle.checked = (precision === 3);
                 avgModeToggle.checked = isAo5Mode;
                 darkModeToggle.checked = isDark;

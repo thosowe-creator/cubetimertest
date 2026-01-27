@@ -730,203 +730,50 @@ button, .history-pen-btn, .penalty-btn { touch-action: manipulation; -webkit-tap
 }
 
 
-/* --- Practice Case Picker (Modal + Button) --- */
-.case-picker-btn{
-  display:flex;
-  align-items:center;
-  justify-content:center;
-  gap:8px;
-  min-height:34px;
-  padding: 6px 10px;
-  border-radius: 12px;
-  border: 1px solid rgba(148,163,184,0.35);
-  background: rgba(255,255,255,0.9);
-  color: rgb(30,41,59);
-  font-size: 12px;
-  font-weight: 700;
-  width: 100%;
-  max-width: 520px;
-}
-html.dark .case-picker-btn{
-  background: rgba(15,23,42,0.55);
-  color: rgb(226,232,240);
-  border-color: rgba(148,163,184,0.25);
-}
-
-.case-inline-btn{
-  display:inline-flex;
-  align-items:center;
-  gap:8px;
-  height: 38px;
-  padding: 0 12px;
-  border-radius: 9999px;
-  border: 1px solid rgba(148,163,184,0.25);
-  background: rgba(255,255,255,0.92);
-  color: rgb(51,65,85);
-  font-weight: 900;
-  cursor: pointer;
-  user-select: none;
-}
-html.dark .case-inline-btn{
-  background: rgba(15,23,42,0.55);
-  color: rgb(226,232,240);
-  border-color: rgba(148,163,184,0.22);
-}
-.case-inline-label{
-  font-size: 10px;
-  letter-spacing: .14em;
-  opacity: .65;
-}
-.case-inline-summary{
-  font-size: 12px;
-  letter-spacing: .02em;
-}
-
-
-.case-modal{
-  position: fixed;
-  inset: 0;
-  z-index: 9999;
-  display:flex;
-  align-items:center;
-  justify-content:center;
-  padding: 14px;
-  background: rgba(2,6,23,0.55);
-}
-.case-modal.hidden{ display:none; }
-
-.case-modal-panel{
-  width: min(720px, 96vw);
-  max-height: 86vh;
-  overflow: hidden;
-  border-radius: 18px;
-  border: 1px solid rgba(148,163,184,0.22);
-  background: rgba(255,255,255,0.96);
-  box-shadow: 0 12px 40px rgba(0,0,0,0.25);
-  display:flex;
+/* Case pool modal */
+#casePoolModal {
+  max-height: calc(100dvh - 2rem);
+  display: flex;
   flex-direction: column;
 }
-html.dark .case-modal-panel{
+#casePoolModal .case-pool-list {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+}
+.case-pool-pill{
+  padding: 6px 10px;
+  border-radius: 9999px;
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 0.06em;
+  border: 1px solid rgba(148,163,184,0.35);
+  background: rgba(248,250,252,0.9);
+  color: rgb(71,85,105);
+  white-space: nowrap;
+}
+.case-pool-pill.active{
   background: rgba(15,23,42,0.92);
-  border-color: rgba(148,163,184,0.18);
+  color: white;
+  border-color: rgba(15,23,42,0.65);
 }
-
-.case-modal-header{
-  display:flex;
-  align-items:center;
-  justify-content:space-between;
-  padding: 12px 14px;
-  border-bottom: 1px solid rgba(148,163,184,0.22);
+.dark .case-pool-pill.active{
+  background: rgba(255,255,255,0.92);
+  color: rgb(15,23,42);
+  border-color: rgba(255,255,255,0.65);
 }
-html.dark .case-modal-header{ border-bottom-color: rgba(148,163,184,0.16); }
-
-.case-modal-title{
-  font-size: 14px;
-  font-weight: 900;
-  letter-spacing: .06em;
-  text-transform: uppercase;
-  color: rgb(51,65,85);
-}
-html.dark .case-modal-title{ color: rgb(226,232,240); }
-
-.case-modal-close{
-  border: 0;
-  background: transparent;
-  font-size: 16px;
-  font-weight: 900;
-  color: rgb(100,116,139);
-  cursor:pointer;
-}
-html.dark .case-modal-close{ color: rgb(148,163,184); }
-
-.case-modal-body{
-  padding: 12px 14px;
-  overflow:auto;
-}
-
-.case-modal-any{
-  display:flex;
-  align-items:center;
-  gap:10px;
-  padding: 10px 10px;
-  border-radius: 12px;
-  border: 1px solid rgba(148,163,184,0.22);
+.case-pool-item{
+  border: 1px solid rgba(148,163,184,0.35);
   background: rgba(248,250,252,0.9);
-  font-size: 13px;
-  font-weight: 800;
-  color: rgb(30,41,59);
+  color: rgb(71,85,105);
 }
-html.dark .case-modal-any{
-  background: rgba(30,41,59,0.45);
-  border-color: rgba(148,163,184,0.16);
-  color: rgb(226,232,240);
+.case-pool-item.selected{
+  background: rgba(15,23,42,0.92);
+  color: white;
+  border-color: rgba(15,23,42,0.65);
 }
-
-.case-modal-list{
-  margin-top: 12px;
-  display:grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 8px;
-}
-@media (max-width: 520px){
-  .case-modal-list{ grid-template-columns: repeat(3, minmax(0,1fr)); }
-}
-@media (max-width: 380px){
-  .case-modal-list{ grid-template-columns: repeat(2, minmax(0,1fr)); }
-}
-
-.case-modal-item{
-  display:flex;
-  align-items:center;
-  gap:8px;
-  padding: 10px 10px;
-  border-radius: 12px;
-  border: 1px solid rgba(148,163,184,0.22);
-  background: rgba(248,250,252,0.9);
-  font-size: 13px;
-  font-weight: 800;
-  color: rgb(30,41,59);
-  cursor:pointer;
-  user-select:none;
-}
-.case-modal-item input{ pointer-events:none; }
-html.dark .case-modal-item{
-  background: rgba(30,41,59,0.45);
-  border-color: rgba(148,163,184,0.16);
-  color: rgb(226,232,240);
-}
-
-.case-modal-footer{
-  display:flex;
-  gap:10px;
-  justify-content:flex-end;
-  padding: 12px 14px;
-  border-top: 1px solid rgba(148,163,184,0.22);
-}
-html.dark .case-modal-footer{ border-top-color: rgba(148,163,184,0.16); }
-
-.case-modal-btn{
-  border-radius: 14px;
-  padding: 10px 14px;
-  font-size: 13px;
-  font-weight: 900;
-  letter-spacing: .02em;
-  border: 1px solid rgba(148,163,184,0.25);
-  cursor:pointer;
-}
-.case-modal-btn.primary{
-  background: rgba(59,130,246,0.18);
-  color: rgb(30,41,59);
-}
-html.dark .case-modal-btn.primary{
-  background: rgba(59,130,246,0.20);
-  color: rgb(226,232,240);
-}
-.case-modal-btn.secondary{
-  background: rgba(148,163,184,0.14);
-  color: rgb(30,41,59);
-}
-html.dark .case-modal-btn.secondary{
-  background: rgba(148,163,184,0.12);
-  color: rgb(226,232,240);
+.dark .case-pool-item.selected{
+  background: rgba(255,255,255,0.92);
+  color: rgb(15,23,42);
+  border-color: rgba(255,255,255,0.65);
 }
