@@ -2527,6 +2527,51 @@ function _swapRLAndInvertAlgString(algText) {
   return _cleanAlg(out.join(' '));
 }
 
+// Normalize an alg string (practice only):
+// - remove cube rotations (x/y/z)
+// - merge consecutive identical bases (U U -> U2, U U' -> removed, etc.)
+function _normalizePracticeAlgString(algText) {
+  const raw = _cleanAlg(algText);
+  if (!raw) return '';
+
+  const tokens = raw.split(' ').filter(Boolean);
+  const out = [];
+
+  const parse = (tok) => {
+    const m = String(tok).trim().match(/^([A-Za-z]+)(2|')?$/);
+    if (!m) return null;
+    return { base: m[1], suf: m[2] || '' };
+  };
+  const pow = (suf) => (suf === '2' ? 2 : (suf === "'" ? 3 : 1));
+  const sufFrom = (p) => {
+    const v = ((p % 4) + 4) % 4;
+    if (v === 0) return '';
+    if (v === 1) return '';
+    if (v === 2) return '2';
+    return "'"; // 3
+  };
+
+  for (const tok of tokens) {
+    const p = parse(tok);
+    if (!p) { out.push(tok); continue; }
+
+    // Remove cube rotations entirely for practice scrambles
+    if (p.base === 'x' || p.base === 'y' || p.base === 'z') continue;
+
+    const last = out.length ? parse(out[out.length - 1]) : null;
+    if (last && last.base === p.base) {
+      const merged = (pow(last.suf) + pow(p.suf)) % 4;
+      if (merged === 0) out.pop();
+      else out[out.length - 1] = p.base + sufFrom(merged);
+      continue;
+    }
+
+    out.push(p.base + p.suf);
+  }
+
+  return _cleanAlg(out.join(' '));
+}
+
 // Convert practice scramble tokens to a cubing.js-friendly form for scramble-display.
 // - lowercase u/r/l/f/b/d => Uw/Rw/Lw/Fw/Bw/Dw
 // - slice moves M/E/S => wide + face combos (no slice tokens needed)
@@ -2691,15 +2736,15 @@ async function generatePracticeScrambleText() {  const raw = _pickRandomAlgFromS
   // (This does NOT touch normal event scrambles.)
   const inv = _invertAlgString(raw);
 
-  // Light obfuscation without cube simulation: optional cube rotation + AUF.
-  const rot = ['', 'y', "y'", 'y2'][_randInt(4)];
+  // Add a light AUF only (no cube rotations). We'll normalize after, so U U won't happen.
   const auf = ['', 'U', "U'", 'U2'][_randInt(4)];
-  let scramble = _cleanAlg([rot, inv, auf].filter(Boolean).join(' '));
+  let scramble = _cleanAlg([inv, auf].filter(Boolean).join(' '));
   // ZBLS hand mode (R/L)
   if (String(currentEvent || '').trim() === 'p_zbls' && practiceZblsHand === 'L') {
     scramble = _swapRLAndInvertAlgString(scramble);
   }
-  return scramble;
+  // Clean up weird edges like y2/y and consecutive U/U'
+  return _normalizePracticeAlgString(scramble);
 }
 
 const suffixes = ["", "'", "2"];
